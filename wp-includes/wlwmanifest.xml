@@ -5,6 +5,7 @@
   <options>
     <clientType>WordPress</clientType>
 	<supportsKeywords>Yes</supportsKeywords>
+	<supportsGetTags>Yes</supportsGetTags>
   </options>
   
   <weblog>
@@ -40,4 +41,3 @@
   </buttons>
 
 </manifest>
-

@@ -1,68 +1,104 @@
-html { background: #f1f1f1; }
+html {
+	background: #f9f9f9;
+}
 
 body {
 	background: #fff;
 	color: #333;
-	font-family: "Lucida Grande", "Lucida Sans Unicode", Tahoma, Verdana, sans-serif;
-	margin: 2em auto 0 auto;
-	width: 700px;
+	font-family: sans-serif;
+	margin: 2em auto;
 	padding: 1em 2em;
-	-webkit-border-radius: 12px;
-	font-size: 62.5%;
+	-webkit-border-radius: 3px;
+	border-radius: 3px;
+	border: 1px solid #dfdfdf;
+	max-width: 700px;
 }
 
-a { color: #2583ad; text-decoration: none; }
+a {
+	color: #21759b;
+	text-decoration: none;
+}
 
-a:hover { color: #d54e21; }
-
+a:hover {
+	color: #d54e21;
+}
 
 h1 {
-	font-size: 18px;
-	margin-bottom: 0;
+	border-bottom: 1px solid #dadada;
+	clear: both;
+	color: #666;
+	font: 24px Georgia, "Times New Roman", Times, serif;
+	margin: 30px 0 0 0;
+	padding: 0;
+	padding-bottom: 7px;
 }
 
-h2 { font-size: 16px; }
+h2 {
+	font-size: 16px;
+}
 
-p, li {
+p, li, dd, dt {
 	padding-bottom: 2px;
-	font-size: 1.3em;
-	line-height: 1.8em;
+	font-size: 14px;
+	line-height: 1.5;
 }
 
-code {
-	font-size: 1.3em;
+code, .code {
+	font-size: 14px;
 }
 
-ul, ol { padding: 5px 5px 5px 22px; }
-
-#logo { margin: 6px 0 14px 0px; border-bottom: none;}
-
-.step a, .step input { font-size: 2em; }
-
-td input { font-size: 1.5em; }
-
-.step, th { text-align: left; padding: 0; }
-
-.submit input, .button, .button-secondary {
-	font-family: "Lucida Grande", "Lucida Sans Unicode", Tahoma, Verdana, sans-serif;
-	padding: 6px;
-	border: none;
-	margin-left: 0;
-	font-size: 13px !important;
-	-moz-border-radius: 2px;
-	-khtml-border-radius: 2px;
-	-webkit-border-radius: 2px;
-	border-radius: 2px;
-	color: #246;
-	background: #e5e5e5;
+ul, ol, dl {
+	padding: 5px 5px 5px 22px;
 }
 
-.button-secondary {
-	background: #cee1ef;
+a img {
+	border:0
 }
-
-.submit input:hover, .button:hover, .button-secondary:hover {
-	color: #d54e21;
+abbr {
+	border: 0;
+	font-variant: normal;
+}
+#logo {
+	margin: 6px 0 14px 0;
+	border-bottom: none;
+	text-align:center
+}
+#logo a {
+	background-image: url('../images/wordpress-logo.png?ver=20120216');
+	background-size: 274px 63px;
+	background-position: top center;
+	background-repeat: no-repeat;
+	height: 67px;
+	text-indent: -9999px;
+	outline: none;
+	overflow: hidden;
+	display: block;
+}
+@media print,
+  (-o-min-device-pixel-ratio: 5/4),
+  (-webkit-min-device-pixel-ratio: 1.25),
+  (min-resolution: 120dpi) {
+	#logo a {
+		background-image: url('../images/wordpress-logo-2x.png?ver=20120412');
+		background-size: 274px 63px;
+	}
+}
+.step {
+	margin: 20px 0 15px;
+}
+.step, th {
+	text-align: left;
+	padding: 0;
+}
+.step .button-large {
+	font-size: 14px;
+}
+textarea {
+	border: 1px solid #dfdfdf;
+	-webkit-border-radius: 3px;
+	border-radius: 3px;
+	font-family: sans-serif;
+	width:  695px;
 }
 
 .form-table {
@@ -73,26 +109,24 @@ td input { font-size: 1.5em; }
 
 .form-table td {
 	margin-bottom: 9px;
-	padding: 10px;
+	padding: 10px 20px 10px 0;
 	border-bottom: 8px solid #fff;
+	font-size: 14px;
+	vertical-align: top
 }
 
 .form-table th {
-	font-size: 12px;
+	font-size: 14px;
 	text-align: left;
-	padding: 12px 10px 10px 10px;
+	padding: 16px 20px 10px 0;
 	border-bottom: 8px solid #fff;
-	width: 110px;
+	width: 140px;
 	vertical-align: top;
-}
-
-.form-table tr {
-	background: #eaf3fa;
 }
 
 .form-table code {
 	line-height: 18px;
-	font-size: 18px;
+	font-size: 14px;
 }
 
 .form-table p {
@@ -100,14 +134,38 @@ td input { font-size: 1.5em; }
 	font-size: 11px;
 }
 
-h1 {
-	border-bottom: 1px solid #dadada;
-	clear: both;
-	color: #666666;
-	font: 24px Georgia, "Times New Roman", Times, serif;
-	margin: 5px 0 0 -4px;
-	padding: 0;
-	padding-bottom: 7px;
+.form-table input {
+	line-height: 20px;
+	font-size: 15px;
+	padding: 2px;
+	border: 1px #dfdfdf solid;
+	-webkit-border-radius: 3px;
+	border-radius: 3px;
+	font-family: sans-serif;
+}
+
+.form-table input[type=text],
+.form-table input[type=password] {
+	width: 206px;
+}
+
+.form-table th p {
+	font-weight: normal;
+}
+
+.form-table.install-success td {
+	vertical-align: middle;
+	padding: 16px 20px 10px 0;
+}
+
+.form-table.install-success td p {
+	margin: 0;
+	font-size: 14px;
+}
+
+.form-table.install-success td code {
+	margin: 0;
+	font-size: 18px;
 }
 
 #error-page {
@@ -116,9 +174,88 @@ h1 {
 
 #error-page p {
 	font-size: 14px;
-	line-height: 1.6em;
+	line-height: 18px;
+	margin: 25px 0 20px;
 }
 
-#error-page code {
-	font-size: 1em;
+#error-page code, .code {
+	font-family: Consolas, Monaco, monospace;
+}
+
+#pass-strength-result {
+	background-color: #eee;
+	border-color: #ddd !important;
+	border-style: solid;
+	border-width: 1px;
+	margin: 5px 5px 5px 0;
+	padding: 5px;
+	text-align: center;
+	width: 200px;
+	display: none;
+}
+
+#pass-strength-result.bad {
+	background-color: #ffb78c;
+	border-color: #ff853c !important;
+}
+
+#pass-strength-result.good {
+	background-color: #ffec8b;
+	border-color: #ffcc00 !important;
+}
+
+#pass-strength-result.short {
+	background-color: #ffa0a0;
+	border-color: #f04040 !important;
+}
+
+#pass-strength-result.strong {
+	background-color: #c3ff88;
+	border-color: #8dff1c !important;
+}
+
+.message {
+	border: 1px solid #e6db55;
+	padding: 0.3em 0.6em;
+	margin: 5px 0 15px;
+	background-color: #ffffe0;
+}
+
+/* install-rtl */
+body.rtl {
+	font-family: Tahoma, arial;
+}
+
+.rtl h1 {
+	font-family: arial;
+	margin: 5px -4px 0 0;
+}
+
+.rtl ul,
+.rtl ol {
+	padding: 5px 22px 5px 5px;
+}
+
+.rtl .step,
+.rtl th,
+.rtl .form-table th {
+	text-align: right;
+}
+
+.rtl .submit input,
+.rtl .button,
+.rtl .button-secondary {
+	margin-right: 0;
+}
+
+.rtl #dbname,
+.rtl #uname,
+.rtl #pwd,
+.rtl #dbhost,
+.rtl #prefix,
+.rtl #user_login,
+.rtl #admin_email,
+.rtl #pass1,
+.rtl #pass2 {
+	direction: ltr;
 }

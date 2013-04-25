@@ -3,12 +3,12 @@
 /* ---------->>> thickbox specific link and font settings <<<------------------------------------------------------*/
 /* ----------------------------------------------------------------------------------------------------------------*/
 #TB_window {
-	font: 12px Arial, Helvetica, sans-serif;
+	font: 12px sans-serif;
 	color: #333333;
 }
 
 #TB_secondLine {
-	font: 10px Arial, Helvetica, sans-serif;
+	font: 10px sans-serif;
 	color:#666666;
 }
 
@@ -33,6 +33,7 @@
 .TB_overlayMacFFBGHack {background: url(macFFBgHack.png) repeat;}
 .TB_overlayBG {
 	background-color:#000;
+	-ms-filter:"progid:DXImageTransform.Microsoft.Alpha(Opacity=75)";
 	filter:alpha(opacity=75);
 	-moz-opacity: 0.75;
 	opacity: 0.75;
@@ -48,11 +49,15 @@
 	background: #ffffff;
 	z-index: 102;
 	color:#000000;
-	display:none;
-	border: 4px solid #525252;
+	visibility: hidden;
 	text-align:left;
 	top:50%;
 	left:50%;
+	border: 1px solid #555;
+	-moz-box-shadow: rgba(0,0,0,1) 0 4px 30px;
+	-webkit-box-shadow: rgba(0,0,0,1) 0 4px 30px;
+	-khtml-box-shadow: rgba(0,0,0,1) 0 4px 30px;
+	box-shadow: rgba(0,0,0,1) 0 4px 30px;
 }
 
 * html #TB_window { /* ie6 hack */
@@ -82,16 +87,14 @@ margin-top: expression(0 - parseInt(this.offsetHeight / 2) + (TBWindowMargin = d
 }
 
 #TB_closeAjaxWindow{
-	padding:7px 10px 5px 0;
-	margin-bottom:1px;
+	padding:6px 10px 0;
 	text-align:right;
 	float:right;
 }
 
 #TB_ajaxWindowTitle{
 	float:left;
-	padding:7px 0 5px 10px;
-	margin-bottom:1px;
+	padding:6px 10px 0;
 }
 
 #TB_title{
@@ -118,12 +121,13 @@ margin-top: expression(0 - parseInt(this.offsetHeight / 2) + (TBWindowMargin = d
 #TB_load{
 	position: fixed;
 	display:none;
-	height:13px;
-	width:208px;
 	z-index:103;
 	top: 50%;
 	left: 50%;
-	margin: -6px 0 0 -104px; /* -height/2 0 0 -width/2 */
+	background-color: #E8E8E8;
+	border: 1px solid #555;
+	margin: -45px 0pt 0pt -125px;
+	padding: 40px 15px 15px;
 }
 
 * html #TB_load { /* ie6 hack */
@@ -154,6 +158,21 @@ margin-top: expression(0 - parseInt(this.offsetHeight / 2) + (TBWindowMargin = d
 	clear:both;
 	border:none;
 	margin-bottom:-1px;
-	margin-top:1px;
 	_margin-bottom:1px;
+}
+
+.tb-close-icon {
+	background: url('tb-close.png') no-repeat;
+	height: 15px;
+	width: 15px;
+}
+
+@media print,
+  (-o-min-device-pixel-ratio: 5/4),
+  (-webkit-min-device-pixel-ratio: 1.25),
+  (min-resolution: 120dpi) {
+	.tb-close-icon {
+		background: url('tb-close-2x.png') no-repeat;
+		background-size: 15px;
+	}
 }

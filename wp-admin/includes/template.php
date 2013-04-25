@@ -1,746 +1,462 @@
 <?php
+/**
+ * Template WordPress Administration API.
+ *
+ * A Big Mess. Also some neat functions that are nicely written.
+ *
+ * @package WordPress
+ * @subpackage Administration
+ */
 
 //
-// Big Mess
+// Category Checklists
 //
 
-// Dandy new recursive multiple category stuff.
-function cat_rows( $parent = 0, $level = 0, $categories = 0 ) {
-	if ( !$categories ) {
-		$args = array('hide_empty' => 0);
-		if ( !empty($_GET['s']) )
-			$args['search'] = $_GET['s'];
-		$categories = get_categories( $args );
+/**
+ * Walker to output an unordered list of category checkbox <input> elements.
+ *
+ * @see Walker
+ * @see wp_category_checklist()
+ * @see wp_terms_checklist()
+ * @since 2.5.1
+ */
+class Walker_Category_Checklist extends Walker {
+	var $tree_type = 'category';
+	var $db_fields = array ('parent' => 'parent', 'id' => 'term_id'); //TODO: decouple this
+
+	function start_lvl( &$output, $depth = 0, $args = array() ) {
+		$indent = str_repeat("\t", $depth);
+		$output .= "$indent<ul class='children'>\n";
 	}
 
-	$children = _get_term_hierarchy('category');
+	function end_lvl( &$output, $depth = 0, $args = array() ) {
+		$indent = str_repeat("\t", $depth);
+		$output .= "$indent</ul>\n";
+	}
 
-	if ( $categories ) {
-		ob_start();
-		foreach ( $categories as $category ) {
-			if ( $category->parent == $parent) {
-				echo "\t" . _cat_row( $category, $level );
-				if ( isset($children[$category->term_id]) )
-					cat_rows( $category->term_id, $level +1, $categories );
-			}
-		}
-		$output = ob_get_contents();
-		ob_end_clean();
+	function start_el( &$output, $category, $depth, $args, $id = 0 ) {
+		extract($args);
+		if ( empty($taxonomy) )
+			$taxonomy = 'category';
 
-		$output = apply_filters('cat_rows', $output);
+		if ( $taxonomy == 'category' )
+			$name = 'post_category';
+		else
+			$name = 'tax_input['.$taxonomy.']';
 
-		echo $output;
-	} else {
-		return false;
+		$class = in_array( $category->term_id, $popular_cats ) ? ' class="popular-category"' : '';
+		$output .= "\n<li id='{$taxonomy}-{$category->term_id}'$class>" . '<label class="selectit"><input value="' . $category->term_id . '" type="checkbox" name="'.$name.'[]" id="in-'.$taxonomy.'-' . $category->term_id . '"' . checked( in_array( $category->term_id, $selected_cats ), true, false ) . disabled( empty( $args['disabled'] ), false, false ) . ' /> ' . esc_html( apply_filters('the_category', $category->name )) . '</label>';
+	}
+
+	function end_el( &$output, $category, $depth = 0, $args = array() ) {
+		$output .= "</li>\n";
 	}
 }
 
-function _cat_row( $category, $level, $name_override = false ) {
-	global $class;
-
-	$category = get_category( $category );
-
-	$pad = str_repeat( '&#8212; ', $level );
-	$name = ( $name_override ? $name_override : $pad . ' ' . $category->name );
-	if ( current_user_can( 'manage_categories' ) ) {
-		$edit = "<a class='row-title' href='categories.php?action=edit&amp;cat_ID=$category->term_id' title='" . attribute_escape(sprintf(__('Edit "%s"'), $category->name)) . "'>$name</a>";
-	} else {
-		$edit = $name;
-	}
-
-	$class = " class='alternate'" == $class ? '' : " class='alternate'";
-
-	$category->count = number_format_i18n( $category->count );
-	$posts_count = ( $category->count > 0 ) ? "<a href='edit.php?cat=$category->term_id'>$category->count</a>" : $category->count;
-	$output = "<tr id='cat-$category->term_id'$class>
-			   <th scope='row' class='check-column'>";
-	if ( absint(get_option( 'default_category' ) ) != $category->term_id ) {
-		$output .= "<input type='checkbox' name='delete[]' value='$category->term_id' /></th>";
-	} else {
-		$output .= "&nbsp;";
-	}
-	$output .= "<td>$edit</td>
-				<td>$category->description</td>
-				<td class='num'>$posts_count</td>\n\t</tr>\n";
-
-	return apply_filters('cat_row', $output);
+/**
+ * Output an unordered list of checkbox <input> elements labelled
+ * with category names.
+ *
+ * @see wp_terms_checklist()
+ * @since 2.5.1
+ *
+ * @param int $post_id Mark categories associated with this post as checked. $selected_cats must not be an array.
+ * @param int $descendants_and_self ID of the category to output along with its descendents.
+ * @param bool|array $selected_cats List of categories to mark as checked.
+ * @param bool|array $popular_cats Override the list of categories that receive the "popular-category" class.
+ * @param object $walker Walker object to use to build the output.
+ * @param bool $checked_ontop Move checked items out of the hierarchy and to the top of the list.
+ */
+function wp_category_checklist( $post_id = 0, $descendants_and_self = 0, $selected_cats = false, $popular_cats = false, $walker = null, $checked_ontop = true ) {
+	wp_terms_checklist( $post_id, array(
+		'taxonomy' => 'category',
+		'descendants_and_self' => $descendants_and_self,
+		'selected_cats' => $selected_cats,
+		'popular_cats' => $popular_cats,
+		'walker' => $walker,
+		'checked_ontop' => $checked_ontop
+	) );
 }
 
-function link_cat_row( $category ) {
-	global $class;
+/**
+ * Output an unordered list of checkbox <input> elements labelled
+ * with term names. Taxonomy independent version of wp_category_checklist().
+ *
+ * @since 3.0.0
+ *
+ * @param int $post_id
+ * @param array $args
+ */
+function wp_terms_checklist($post_id = 0, $args = array()) {
+ 	$defaults = array(
+		'descendants_and_self' => 0,
+		'selected_cats' => false,
+		'popular_cats' => false,
+		'walker' => null,
+		'taxonomy' => 'category',
+		'checked_ontop' => true
+	);
+	$args = apply_filters( 'wp_terms_checklist_args', $args, $post_id );
 
-	if ( !$category = get_term( $category, 'link_category' ) )
-		return false;
-	if ( is_wp_error( $category ) )
-		return $category;
+	extract( wp_parse_args($args, $defaults), EXTR_SKIP );
 
-	$name = ( $name_override ? $name_override : $category->name );
-	if ( current_user_can( 'manage_categories' ) ) {
-		$edit = "<a class='row-title' href='link-category.php?action=edit&amp;cat_ID=$category->term_id' title='" . attribute_escape(sprintf(__('Edit "%s"'), $category->name)) . "' class='edit'>$name</a>";
-		$default_cat_id = (int) get_option( 'default_link_category' );
-	} else {
-		$edit = $name;
-	}
+	if ( empty($walker) || !is_a($walker, 'Walker') )
+		$walker = new Walker_Category_Checklist;
 
-	$class = " class='alternate'" == $class ? '' : " class='alternate'";
+	$descendants_and_self = (int) $descendants_and_self;
 
-	$category->count = number_format_i18n( $category->count );
-	$count = ( $category->count > 0 ) ? "<a href='link-manager.php?cat_id=$category->term_id'>$category->count</a>" : $category->count;
-	$output = "<tr id='link-cat-$category->term_id'$class>" .
-		'<th scope="row" class="check-column"> <input type="checkbox" name="delete[]" value="' . $category->term_id . '" /></th>' .
-		"<td>$edit</td>
-		<td>$category->description</td>
-		<td class='num'>$count</td></tr>";
+	$args = array('taxonomy' => $taxonomy);
 
-	return apply_filters( 'link_cat_row', $output );
-}
+	$tax = get_taxonomy($taxonomy);
+	$args['disabled'] = !current_user_can($tax->cap->assign_terms);
 
-function checked( $checked, $current) {
-	if ( $checked == $current)
-		echo ' checked="checked"';
-}
-
-function selected( $selected, $current) {
-	if ( $selected == $current)
-		echo ' selected="selected"';
-}
-
-//
-// Nasty Category Stuff
-//
-
-function sort_cats( $cat1, $cat2 ) {
-	if ( $cat1['checked'] || $cat2['checked'] )
-		return ( $cat1['checked'] && !$cat2['checked'] ) ? -1 : 1;
+	if ( is_array( $selected_cats ) )
+		$args['selected_cats'] = $selected_cats;
+	elseif ( $post_id )
+		$args['selected_cats'] = wp_get_object_terms($post_id, $taxonomy, array_merge($args, array('fields' => 'ids')));
 	else
-		return strcasecmp( $cat1['cat_name'], $cat2['cat_name'] );
-}
+		$args['selected_cats'] = array();
 
-function wp_set_checked_post_categories( $default = 0 ) {
-	global $post_ID, $checked_categories;
+	if ( is_array( $popular_cats ) )
+		$args['popular_cats'] = $popular_cats;
+	else
+		$args['popular_cats'] = get_terms( $taxonomy, array( 'fields' => 'ids', 'orderby' => 'count', 'order' => 'DESC', 'number' => 10, 'hierarchical' => false ) );
 
-	if ( empty($checked_categories) ) {
-		if ( $post_ID ) {
-			$checked_categories = wp_get_post_categories($post_ID);
-
-			if ( count( $checked_categories ) == 0 ) {
-				// No selected categories, strange
-			$checked_categories[] = $default;
-			}
-		} else {
-			$checked_categories[] = $default;
-		}
-	}
-
-}
-function get_nested_categories( $default = 0, $parent = 0 ) {
-	global $checked_categories;
-
-	wp_set_checked_post_categories( $default = 0 );
-
-	if ( is_object($parent) ) { // Hack: if passed a category object, will return nested cats with parent as root
-		$root = array(
-			'children' => get_nested_categories( $default, $parent->term_id ),
-			'cat_ID' => $parent->term_id,
-			'checked' => in_array( $parent->term_id, $checked_categories ),
-			'cat_name' => get_the_category_by_ID( $parent->term_id )
-		);
-		$result = array( $parent->term_id => $root );
+	if ( $descendants_and_self ) {
+		$categories = (array) get_terms($taxonomy, array( 'child_of' => $descendants_and_self, 'hierarchical' => 0, 'hide_empty' => 0 ) );
+		$self = get_term( $descendants_and_self, $taxonomy );
+		array_unshift( $categories, $self );
 	} else {
-		$parent = (int) $parent;
+		$categories = (array) get_terms($taxonomy, array('get' => 'all'));
+	}
 
-		$cats = get_categories("parent=$parent&hide_empty=0&fields=ids");
+	if ( $checked_ontop ) {
+		// Post process $categories rather than adding an exclude to the get_terms() query to keep the query the same across all posts (for any query cache)
+		$checked_categories = array();
+		$keys = array_keys( $categories );
 
-		$result = array();
-		if ( is_array( $cats ) ) {
-			foreach ( $cats as $cat ) {
-				$result[$cat]['children'] = get_nested_categories( $default, $cat );
-				$result[$cat]['cat_ID'] = $cat;
-				$result[$cat]['checked'] = in_array( $cat, $checked_categories );
-				$result[$cat]['cat_name'] = get_the_category_by_ID( $cat );
+		foreach( $keys as $k ) {
+			if ( in_array( $categories[$k]->term_id, $args['selected_cats'] ) ) {
+				$checked_categories[] = $categories[$k];
+				unset( $categories[$k] );
 			}
 		}
+
+		// Put checked cats on top
+		echo call_user_func_array(array(&$walker, 'walk'), array($checked_categories, 0, $args));
 	}
-
-	$result = apply_filters('get_nested_categories', $result);
-	usort( $result, 'sort_cats' );
-
-	return $result;
+	// Then the rest of them
+	echo call_user_func_array(array(&$walker, 'walk'), array($categories, 0, $args));
 }
 
-function write_nested_categories( $categories ) {
-	foreach ( $categories as $category ) {
-		echo "\n", '<li id="category-', $category['cat_ID'], '"><label for="in-category-', $category['cat_ID'], '" class="selectit"><input value="', $category['cat_ID'], '" type="checkbox" name="post_category[]" id="in-category-', $category['cat_ID'], '"', ($category['checked'] ? ' checked="checked"' : "" ), '/> ', wp_specialchars( apply_filters('the_category', $category['cat_name'] )), '</label>';
+/**
+ * Retrieve a list of the most popular terms from the specified taxonomy.
+ *
+ * If the $echo argument is true then the elements for a list of checkbox
+ * <input> elements labelled with the names of the selected terms is output.
+ * If the $post_ID global isn't empty then the terms associated with that
+ * post will be marked as checked.
+ *
+ * @since 2.5.0
+ *
+ * @param string $taxonomy Taxonomy to retrieve terms from.
+ * @param int $default Unused.
+ * @param int $number Number of terms to retrieve. Defaults to 10.
+ * @param bool $echo Optionally output the list as well. Defaults to true.
+ * @return array List of popular term IDs.
+ */
+function wp_popular_terms_checklist( $taxonomy, $default = 0, $number = 10, $echo = true ) {
+	$post = get_post();
 
-		if ( $category['children'] ) {
-			echo "\n<ul>";
-			write_nested_categories( $category['children'] );
-			echo "\n</ul>";
-		}
-		echo '</li>';
-	}
-}
+	if ( $post && $post->ID )
+		$checked_terms = wp_get_object_terms($post->ID, $taxonomy, array('fields'=>'ids'));
+	else
+		$checked_terms = array();
 
-function dropdown_categories( $default = 0, $parent = 0 ) {
-	write_nested_categories( get_nested_categories( $default, $parent ) );
-}
+	$terms = get_terms( $taxonomy, array( 'orderby' => 'count', 'order' => 'DESC', 'number' => $number, 'hierarchical' => false ) );
 
-function wp_popular_terms_checklist( $taxonomy, $default = 0, $number = 10 ) {
-	$categories = get_terms( $taxonomy, array( 'orderby' => 'count', 'order' => 'DESC', 'number' => $number ) );
+	$tax = get_taxonomy($taxonomy);
 
-	foreach ( (array) $categories as $category ) {
-		$id = "popular-category-$category->term_id";
+	$popular_ids = array();
+	foreach ( (array) $terms as $term ) {
+		$popular_ids[] = $term->term_id;
+		if ( !$echo ) // hack for AJAX use
+			continue;
+		$id = "popular-$taxonomy-$term->term_id";
+		$checked = in_array( $term->term_id, $checked_terms ) ? 'checked="checked"' : '';
 		?>
 
-		<li id="<?php echo $id; ?>" >
-			<label class="selectit" for="in-<?php echo $id; ?>">
-			<input id="in-<?php echo $id; ?>" type="checkbox" value="<?php echo (int) $category->term_id; ?>" />
-				<?php echo wp_specialchars( apply_filters( 'the_category', $category->name ) ); ?>
+		<li id="<?php echo $id; ?>" class="popular-category">
+			<label class="selectit">
+			<input id="in-<?php echo $id; ?>" type="checkbox" <?php echo $checked; ?> value="<?php echo (int) $term->term_id; ?>" <?php disabled( ! current_user_can( $tax->cap->assign_terms ) ); ?> />
+				<?php echo esc_html( apply_filters( 'the_category', $term->name ) ); ?>
 			</label>
 		</li>
 
 		<?php
 	}
+	return $popular_ids;
 }
 
-function dropdown_link_categories( $default = 0 ) {
-	global $link_id;
+/**
+ * {@internal Missing Short Description}}
+ *
+ * @since 2.5.1
+ *
+ * @param unknown_type $link_id
+ */
+function wp_link_category_checklist( $link_id = 0 ) {
+	$default = 1;
 
 	if ( $link_id ) {
-		$checked_categories = wp_get_link_cats($link_id);
-
-		if ( count( $checked_categories ) == 0 ) {
-			// No selected categories, strange
+		$checked_categories = wp_get_link_cats( $link_id );
+		// No selected categories, strange
+		if ( ! count( $checked_categories ) )
 			$checked_categories[] = $default;
-		}
 	} else {
 		$checked_categories[] = $default;
 	}
 
-	$categories = get_terms('link_category', 'orderby=count&hide_empty=0');
+	$categories = get_terms( 'link_category', array( 'orderby' => 'name', 'hide_empty' => 0 ) );
 
-	if ( empty($categories) )
+	if ( empty( $categories ) )
 		return;
 
 	foreach ( $categories as $category ) {
 		$cat_id = $category->term_id;
-		$name = wp_specialchars( apply_filters('the_category', $category->name));
-		$checked = in_array( $cat_id, $checked_categories );
-		echo '<li id="link-category-', $cat_id, '"><label for="in-link-category-', $cat_id, '" class="selectit"><input value="', $cat_id, '" type="checkbox" name="link_category[]" id="in-link-category-', $cat_id, '"', ($checked ? ' checked="checked"' : "" ), '/> ', $name, "</label></li>";
+		$name = esc_html( apply_filters( 'the_category', $category->name ) );
+		$checked = in_array( $cat_id, $checked_categories ) ? ' checked="checked"' : '';
+		echo '<li id="link-category-', $cat_id, '"><label for="in-link-category-', $cat_id, '" class="selectit"><input value="', $cat_id, '" type="checkbox" name="link_category[]" id="in-link-category-', $cat_id, '"', $checked, '/> ', $name, "</label></li>";
 	}
 }
 
-// Tag stuff
-
-// Returns a single tag row (see tag_rows below)
-// Note: this is also used in admin-ajax.php!
-function _tag_row( $tag, $class = '' ) {
-		$count = number_format_i18n( $tag->count );
-		$count = ( $count > 0 ) ? "<a href='edit.php?tag=$tag->slug'>$count</a>" : $count;
-
-		$name = apply_filters( 'term_name', $tag->name );
-		$out = '';
-		$out .= '<tr id="tag-' . $tag->term_id . '"' . $class . '>';
-		$out .= '<th scope="row" class="check-column"> <input type="checkbox" name="delete_tags[]" value="' . $tag->term_id . '" /></th>';
-		$out .= '<td><strong><a class="row-title" href="edit-tags.php?action=edit&amp;tag_ID=' . $tag->term_id . '" title="' . attribute_escape(sprintf(__('Edit "%s"'), $name)) . '">' .
-			$name . '</a></td>';
-
-		$out .= "<td class='num'>$count</td>";
-		$out .= '</tr>';
-
-		return $out;
-}
-
-// Outputs appropriate rows for the Nth page of the Tag Management screen,
-// assuming M tags displayed at a time on the page
-// Returns the number of tags displayed
-function tag_rows( $page = 1, $pagesize = 20, $searchterms = '' ) {
-
-	// Get a page worth of tags
-	$start = ($page - 1) * $pagesize;
-
-	$args = array('offset' => $start, 'number' => $pagesize, 'hide_empty' => 0);
-
-	if ( !empty( $searchterms ) ) {
-		$args['search'] = $searchterms;
-	}
-
-	$tags = get_terms( 'post_tag', $args );
-
-	// convert it to table rows
-	$out = '';
-	$class = '';
-	$count = 0;
-	foreach( $tags as $tag )
-		$out .= _tag_row( $tag, ++$count % 2 ? ' class="alternate"' : '' );
-
-	// filter and send to screen
-	$out = apply_filters('tag_rows', $out);
-	echo $out;
-	return $count;
-}
-
-// define the columns to display, the syntax is 'internal name' => 'display name'
-function wp_manage_posts_columns() {
-	$posts_columns = array();
-	$posts_columns['cb'] = '<input type="checkbox" onclick="checkAll(document.getElementById(\'posts-filter\'));" />';
-	if ( 'draft' === $_GET['post_status'] )
-		$posts_columns['modified'] = __('Modified');
-	elseif ( 'pending' === $_GET['post_status'] )
-		$posts_columns['modified'] = __('Submitted');
-	else
-		$posts_columns['date'] = __('Date');
-	$posts_columns['title'] = __('Title');
-	$posts_columns['author'] = __('Author');
-	$posts_columns['categories'] = __('Categories');
-	$posts_columns['tags'] = __('Tags');
-	if ( !in_array($_GET['post_status'], array('pending', 'draft', 'future')) )
-		$posts_columns['comments'] = '<div class="vers"><img alt="Comments" src="images/comment-grey-bubble.png" /></div>';
-	$posts_columns['status'] = __('Status');
-	$posts_columns = apply_filters('manage_posts_columns', $posts_columns);
-
-	return $posts_columns;
-}
-
-// define the columns to display, the syntax is 'internal name' => 'display name'
-function wp_manage_media_columns() {
-	$posts_columns = array();
-	$posts_columns['cb'] = '<input type="checkbox" onclick="checkAll(document.getElementById(\'posts-filter\'));" />';
-	$posts_columns['icon'] = '';
-	$posts_columns['media'] = _c('Media|media column header');
-	$posts_columns['desc'] = _c('Description|media column header');
-	$posts_columns['date'] = _c('Date Added|media column header');
-	$posts_columns['parent'] = _c('Appears with|media column header');
-	$posts_columns['comments'] = '<div class="vers"><img alt="Comments" src="images/comment-grey-bubble.png" /></div>';
-	$posts_columns['location'] = _c('Location|media column header');
-	$posts_columns = apply_filters('manage_media_columns', $posts_columns);
-
-	return $posts_columns;
-}
-
-function wp_manage_pages_columns() {
-	$posts_columns = array();
-	$posts_columns['cb'] = '<input type="checkbox" onclick="checkAll(document.getElementById(\'posts-filter\'));" />';
-	if ( 'draft' === $_GET['post_status'] )
-		$posts_columns['modified'] = __('Modified');
-	elseif ( 'pending' === $_GET['post_status'] )
-		$posts_columns['modified'] = __('Submitted');
-	else
-		$posts_columns['date'] = __('Date');
-	$posts_columns['title'] = __('Title');
-	$posts_columns['author'] = __('Author');
-	if ( !in_array($_GET['post_status'], array('pending', 'draft', 'future')) )
-		$posts_columns['comments'] = '<div class="vers"><img alt="" src="images/comment-grey-bubble.png" /></div>';
-	$posts_columns['status'] = __('Status');
-	$posts_columns = apply_filters('manage_pages_columns', $posts_columns);
-
-	return $posts_columns;
-}
-
-/*
- * display one row if the page doesn't have any children
- * otherwise, display the row and its children in subsequent rows
+// adds hidden fields with the data for use in the inline editor for posts and pages
+/**
+ * {@internal Missing Short Description}}
+ *
+ * @since 2.7.0
+ *
+ * @param unknown_type $post
  */
-function display_page_row( $page, &$children_pages, $level = 0 ) {
-	global $post;
-	static $class;
+function get_inline_data($post) {
+	$post_type_object = get_post_type_object($post->post_type);
+	if ( ! current_user_can($post_type_object->cap->edit_post, $post->ID) )
+		return;
 
-	$post = $page;
-	setup_postdata($page);
+	$title = esc_textarea( trim( $post->post_title ) );
 
-	$page->post_title = wp_specialchars( $page->post_title );
-	$pad = str_repeat( '&#8212; ', $level );
-	$id = (int) $page->ID;
-	$class = ('alternate' == $class ) ? '' : 'alternate';
-	$posts_columns = wp_manage_pages_columns();
-	$title = get_the_title();
-	if ( empty($title) )
-		$title = __('(no title)');
-?>
-  <tr id='page-<?php echo $id; ?>' class='<?php echo $class; ?>'>
+	echo '
+<div class="hidden" id="inline_' . $post->ID . '">
+	<div class="post_title">' . $title . '</div>
+	<div class="post_name">' . apply_filters('editable_slug', $post->post_name) . '</div>
+	<div class="post_author">' . $post->post_author . '</div>
+	<div class="comment_status">' . esc_html( $post->comment_status ) . '</div>
+	<div class="ping_status">' . esc_html( $post->ping_status ) . '</div>
+	<div class="_status">' . esc_html( $post->post_status ) . '</div>
+	<div class="jj">' . mysql2date( 'd', $post->post_date, false ) . '</div>
+	<div class="mm">' . mysql2date( 'm', $post->post_date, false ) . '</div>
+	<div class="aa">' . mysql2date( 'Y', $post->post_date, false ) . '</div>
+	<div class="hh">' . mysql2date( 'H', $post->post_date, false ) . '</div>
+	<div class="mn">' . mysql2date( 'i', $post->post_date, false ) . '</div>
+	<div class="ss">' . mysql2date( 's', $post->post_date, false ) . '</div>
+	<div class="post_password">' . esc_html( $post->post_password ) . '</div>';
 
+	if ( $post_type_object->hierarchical )
+		echo '<div class="post_parent">' . $post->post_parent . '</div>';
 
- <?php
+	if ( $post->post_type == 'page' )
+		echo '<div class="page_template">' . esc_html( get_post_meta( $post->ID, '_wp_page_template', true ) ) . '</div>';
 
-foreach ($posts_columns as $column_name=>$column_display_name) {
+	if ( post_type_supports( $post->post_type, 'page-attributes' ) )
+		echo '<div class="menu_order">' . $post->menu_order . '</div>';
 
-	switch ($column_name) {
+	$taxonomy_names = get_object_taxonomies( $post->post_type );
+	foreach ( $taxonomy_names as $taxonomy_name) {
+		$taxonomy = get_taxonomy( $taxonomy_name );
 
-	case 'cb':
-		?>
-		<th scope="row" class="check-column"><input type="checkbox" name="delete[]" value="<?php the_ID(); ?>" /></th>
-		<?php
-		break;
-	case 'modified':
-	case 'date':
-		if ( '0000-00-00 00:00:00' == $page->post_date && 'date' == $column_name ) {
-			$t_time = $h_time = __('Unpublished');
-		} else {
-			if ( 'modified' == $column_name ) {
-				$t_time = get_the_modified_time(__('Y/m/d g:i:s A'));
-				$m_time = $page->post_modified;
-				$time = get_post_modified_time('G', true);
-			} else {
-				$t_time = get_the_time(__('Y/m/d g:i:s A'));
-				$m_time = $page->post_date;
-				$time = get_post_time('G', true);
-			}
-			if ( ( abs(time() - $time) ) < 86400 ) {
-				if ( ( 'future' == $page->post_status) )
-					$h_time = sprintf( __('%s from now'), human_time_diff( $time ) );
-				else
-					$h_time = sprintf( __('%s ago'), human_time_diff( $time ) );
-			} else {
-				$h_time = mysql2date(__('Y/m/d'), $m_time);
-			}
-		}
-		?>
-		<td><abbr title="<?php echo $t_time ?>"><?php echo $h_time ?></abbr></td>
-		<?php
-		break;
-	case 'title':
-		?>
-		<td><strong><a class="row-title" href="page.php?action=edit&amp;post=<?php the_ID(); ?>" title="<?php echo attribute_escape(sprintf(__('Edit "%s"'), $title)); ?>"><?php echo $pad; echo $title ?></a></strong>
-		<?php if ('private' == $page->post_status) _e(' &#8212; <strong>Private</strong>'); ?></td>
-		<?php
-		break;
-
-	case 'comments':
-		?>
-		<td class="num"><div class="post-com-count-wrapper">
-		<?php
-		$left = get_pending_comments_num( $page->ID );
-		$pending_phrase = sprintf( __('%s pending'), number_format( $left ) );
-		if ( $left )
-			echo '<strong>';
-		comments_number("<a href='edit-pages.php?page_id=$id' title='$pending_phrase' class='post-com-count'><span class='comment-count'>" . __('0') . '</span></a>', "<a href='edit-pages.php?page_id=$id' title='$pending_phrase' class='post-com-count'><span class='comment-count'>" . __('1') . '</span></a>', "<a href='edit-pages.php?page_id=$id' title='$pending_phrase' class='post-com-count'><span class='comment-count'>" . __('%') . '</span></a>');
-		if ( $left )
-			echo '</strong>';
-		?>
-		</div></td>
-		<?php
-		break;
-
-	case 'author':
-		?>
-		<td><a href="edit-pages.php?author=<?php the_author_ID(); ?>"><?php the_author() ?></a></td>
-		<?php
-		break;
-
-	case 'status':
-		?>
-		<td>
-		<a href="<?php the_permalink(); ?>" title="<?php echo attribute_escape(sprintf(__('View "%s"'), $title)); ?>" rel="permalink">
-		<?php
-		switch ( $page->post_status ) {
-			case 'publish' :
-			case 'private' :
-				_e('Published');
-				break;
-			case 'future' :
-				_e('Scheduled');
-				break;
-			case 'pending' :
-				_e('Pending Review');
-				break;
-			case 'draft' :
-				_e('Unpublished');
-				break;
-		}
-		?>
-		</a>
-		</td>
-		<?php
-		break;
-
-	default:
-		?>
-		<td><?php do_action('manage_pages_custom_column', $column_name, $id); ?></td>
-		<?php
-		break;
-	}
-}
- ?>
-
-   </tr>
-
-<?php
-
-	if ( ! $children_pages )
-		return true;
-
-	for ( $i = 0; $i < count($children_pages); $i++ ) {
-
-		$child = $children_pages[$i];
-
-		if ( $child->post_parent == $id ) {
-			array_splice($children_pages, $i, 1);
-			display_page_row($child, $children_pages, $level+1);
-			$i = -1; //as numeric keys in $children_pages are not preserved after splice
+		if ( $taxonomy->hierarchical && $taxonomy->show_ui ) {
+				echo '<div class="post_category" id="' . $taxonomy_name . '_' . $post->ID . '">'
+					. implode( ',', wp_get_object_terms( $post->ID, $taxonomy_name, array( 'fields' => 'ids' ) ) ) . '</div>';
+		} elseif ( $taxonomy->show_ui ) {
+			echo '<div class="tags_input" id="'.$taxonomy_name.'_'.$post->ID.'">'
+				. esc_html( str_replace( ',', ', ', get_terms_to_edit( $post->ID, $taxonomy_name ) ) ) . '</div>';
 		}
 	}
+
+	if ( !$post_type_object->hierarchical )
+		echo '<div class="sticky">' . (is_sticky($post->ID) ? 'sticky' : '') . '</div>';
+
+	if ( post_type_supports( $post->post_type, 'post-formats' ) )
+		echo '<div class="post_format">' . esc_html( get_post_format( $post->ID ) ) . '</div>';
+
+	echo '</div>';
 }
 
-/*
- * displays pages in hierarchical order
+/**
+ * {@internal Missing Short Description}}
+ *
+ * @since 2.7.0
+ *
+ * @param unknown_type $position
+ * @param unknown_type $checkbox
+ * @param unknown_type $mode
  */
-function page_rows( $pages ) {
-	if ( ! $pages )
-		$pages = get_pages( 'sort_column=menu_order' );
+function wp_comment_reply($position = '1', $checkbox = false, $mode = 'single', $table_row = true) {
+	// allow plugin to replace the popup content
+	$content = apply_filters( 'wp_comment_reply', '', array('position' => $position, 'checkbox' => $checkbox, 'mode' => $mode) );
 
-	if ( ! $pages )
-		return false;
-
-	// splice pages into two parts: those without parent and those with parent
-
-	$top_level_pages = array();
-	$children_pages  = array();
-
-	foreach ( $pages as $page ) {
-
-		// catch and repair bad pages
-		if ( $page->post_parent == $page->ID ) {
-			$page->post_parent = 0;
-			$wpdb->query( $wpdb->prepare("UPDATE $wpdb->posts SET post_parent = '0' WHERE ID = %d", $page->ID) );
-			clean_page_cache( $page->ID );
-		}
-
-		if ( 0 == $page->post_parent )
-			$top_level_pages[] = $page;
-		else
-			$children_pages[] = $page;
+	if ( ! empty($content) ) {
+		echo $content;
+		return;
 	}
 
-	foreach ( $top_level_pages as $page )
-		display_page_row($page, $children_pages, 0);
-
-	/*
-	 * display the remaining children_pages which are orphans
-	 * having orphan requires parental attention
-	 */
-	 if ( count($children_pages) > 0 ) {
-	 	$empty_array = array();
-	 	foreach ( $children_pages as $orphan_page ) {
-			clean_page_cache( $orphan_page->ID);
-			display_page_row( $orphan_page, $empty_array, 0 );
-		}
-	 }
-}
-
-function user_row( $user_object, $style = '', $role = '' ) {
-	global $wp_roles;
-
-	$current_user = wp_get_current_user();
-	
-	if ( !( is_object( $user_object) && is_a( $user_object, 'WP_User' ) ) )
-		$user_object = new WP_User( (int) $user_object );
-	$email = $user_object->user_email;
-	$url = $user_object->user_url;
-	$short_url = str_replace( 'http://', '', $url );
-	$short_url = str_replace( 'www.', '', $short_url );
-	if ('/' == substr( $short_url, -1 ))
-		$short_url = substr( $short_url, 0, -1 );
-	if ( strlen( $short_url ) > 35 )
-		$short_url =  substr( $short_url, 0, 32 ).'...';
-	$numposts = get_usernumposts( $user_object->ID );
-	if ( current_user_can( 'edit_user', $user_object->ID ) ) {
-		if ($current_user->ID == $user_object->ID) {
-			$edit = 'profile.php';
-		} else {
-			$edit = clean_url( add_query_arg( 'wp_http_referer', urlencode( clean_url( stripslashes( $_SERVER['REQUEST_URI'] ) ) ), "user-edit.php?user_id=$user_object->ID" ) );
-		}
-		$edit = "<a href=\"$edit\">$user_object->user_login</a>";
+	if ( $mode == 'single' ) {
+		$wp_list_table = _get_list_table('WP_Post_Comments_List_Table');
 	} else {
-		$edit = $user_object->user_login;
+		$wp_list_table = _get_list_table('WP_Comments_List_Table');
 	}
-	$role_name = translate_with_context($wp_roles->role_names[$role]);
-	$r = "<tr id='user-$user_object->ID'$style>
-		<th scope='row' class='check-column'><input type='checkbox' name='users[]' id='user_{$user_object->ID}' class='$role' value='{$user_object->ID}' /></th>
-		<td><strong>$edit</strong></td>
-		<td>$user_object->first_name $user_object->last_name</td>
-		<td><a href='mailto:$email' title='" . sprintf( __('e-mail: %s' ), $email ) . "'>$email</a></td>
-		<td>$role_name</td>";
-	$r .= "\n\t\t<td class='num'>";
-	if ( $numposts > 0 ) {
-		$r .= "<a href='edit.php?author=$user_object->ID' title='" . __( 'View posts by this author' ) . "' class='edit'>";
-		$r .= $numposts;
-		$r .= '</a>';
-	} else {
-		$r .= 0;
-	}
-	$r .= "</td>\n\t</tr>";
-	return $r;
-}
-
-function _wp_get_comment_list( $status = '', $s = false, $start, $num ) {
-	global $wpdb;
-
-	$start = abs( (int) $start );
-	$num = (int) $num;
-
-	if ( 'moderated' == $status )
-		$approved = "comment_approved = '0'";
-	elseif ( 'approved' == $status )
-		$approved = "comment_approved = '1'";
-	elseif ( 'spam' == $status )
-		$approved = "comment_approved = 'spam'";
-	else
-		$approved = "comment_approved != 'spam'";
-
-	if ( $s ) {
-		$s = $wpdb->escape($s);
-		$comments = $wpdb->get_results("SELECT SQL_CALC_FOUND_ROWS * FROM $wpdb->comments WHERE
-			(comment_author LIKE '%$s%' OR
-			comment_author_email LIKE '%$s%' OR
-			comment_author_url LIKE ('%$s%') OR
-			comment_author_IP LIKE ('%$s%') OR
-			comment_content LIKE ('%$s%') ) AND
-			$approved
-			ORDER BY comment_date_gmt DESC LIMIT $start, $num");
-	} else {
-		$comments = $wpdb->get_results( "SELECT SQL_CALC_FOUND_ROWS * FROM $wpdb->comments USE INDEX (comment_date_gmt) WHERE $approved ORDER BY comment_date_gmt DESC LIMIT $start, $num" );
-	}
-
-	update_comment_cache($comments);
-
-	$total = $wpdb->get_var( "SELECT FOUND_ROWS()" );
-
-	return array($comments, $total);
-}
-
-function _wp_comment_row( $comment_id, $mode, $comment_status, $checkbox = true ) {
-	global $comment, $post;
-	$comment = get_comment( $comment_id );
-	$post = get_post($comment->comment_post_ID);
-	$authordata = get_userdata($post->post_author);
-	$the_comment_status = wp_get_comment_status($comment->comment_ID);
-	$class = ('unapproved' == $the_comment_status) ? 'unapproved' : '';
-
-	if ( current_user_can( 'edit_post', $post->ID ) ) {
-		$post_link = "<a href='" . get_comment_link() . "'>";
-
-		$post_link .= get_the_title($comment->comment_post_ID) . '</a>';
-			
-		$edit_link_start = "<a class='row-title' href='comment.php?action=editcomment&amp;c={$comment->comment_ID}' title='" . __('Edit comment') . "'>";
-		$edit_link_end = '</a>';
-	} else {
-		$post_link = get_the_title($comment->comment_post_ID);
-		$edit_link_start = $edit_link_end ='';
-	}
-	
-	$author_url = get_comment_author_url();
-	if ( 'http://' == $author_url )
-		$author_url = '';
-	$author_url_display = $author_url;
-	if ( strlen($author_url_display) > 50 )
-		$author_url_display = substr($author_url_display, 0, 49) . '...';
-
-	$ptime = date('G', strtotime( $comment->comment_date ) );
-	if ( ( abs(time() - $ptime) ) < 86400 )
-		$ptime = sprintf( __('%s ago'), human_time_diff( $ptime ) );
-	else
-		$ptime = mysql2date(__('Y/m/d \a\t g:i A'), $comment->comment_date );
-
-	$delete_url    = clean_url( wp_nonce_url( "comment.php?action=deletecomment&p=$comment->comment_post_ID&c=$comment->comment_ID", "delete-comment_$comment->comment_ID" ) );
-	$approve_url   = clean_url( wp_nonce_url( "comment.php?action=approvecomment&p=$comment->comment_post_ID&c=$comment->comment_ID", "approve-comment_$comment->comment_ID" ) );
-	$unapprove_url = clean_url( wp_nonce_url( "comment.php?action=unapprovecomment&p=$comment->comment_post_ID&c=$comment->comment_ID", "unapprove-comment_$comment->comment_ID" ) );
-	$spam_url      = clean_url( wp_nonce_url( "comment.php?action=deletecomment&dt=spam&p=$comment->comment_post_ID&c=$comment->comment_ID", "delete-comment_$comment->comment_ID" ) );
 
 ?>
-  <tr id="comment-<?php echo $comment->comment_ID; ?>" class='<?php echo $class; ?>'>
-<?php if ( $checkbox ) : ?>
-    <td class="check-column"><?php if ( current_user_can('edit_post', $comment->comment_post_ID) ) { ?><input type="checkbox" name="delete_comments[]" value="<?php echo $comment->comment_ID; ?>" /><?php } ?></td>
+<form method="get" action="">
+<?php if ( $table_row ) : ?>
+<table style="display:none;"><tbody id="com-reply"><tr id="replyrow" style="display:none;"><td colspan="<?php echo $wp_list_table->get_column_count(); ?>" class="colspanchange">
+<?php else : ?>
+<div id="com-reply" style="display:none;"><div id="replyrow" style="display:none;">
 <?php endif; ?>
-    <td class="comment">
-    <p class="comment-author"><strong><?php echo $edit_link_start; comment_author(); echo $edit_link_end; ?></strong><br />
-    <?php if ( !empty($author_url) ) : ?>
-    <a href="<?php echo $author_url ?>"><?php echo $author_url_display; ?></a> |
-    <?php endif; ?>
-    <?php if ( current_user_can( 'edit_post', $post->ID ) ) : ?>
-    <?php if ( !empty($comment->comment_author_email) ): ?>
-    <?php comment_author_email_link() ?> |
-    <?php endif; ?>
-    <a href="edit-comments.php?s=<?php comment_author_IP() ?>&amp;mode=detail"><?php comment_author_IP() ?></a>
-	<?php endif; //current_user_can?>    
-    </p>
-   	<?php if ( 'detail' == $mode ) comment_text(); ?>
-   	<p><?php printf(__('From %1$s, %2$s'), $post_link, $ptime) ?></p>
-    </td>
-    <td><?php comment_date(__('Y/m/d')); ?></td>
-    <td class="action-links">
-<?php
+	<div id="replyhead" style="display:none;"><h5><?php _e( 'Reply to Comment' ); ?></h5></div>
+	<div id="addhead" style="display:none;"><h5><?php _e('Add new Comment'); ?></h5></div>
+	<div id="edithead" style="display:none;">
+		<div class="inside">
+		<label for="author"><?php _e('Name') ?></label>
+		<input type="text" name="newcomment_author" size="50" value="" id="author" />
+		</div>
 
-	$actions = array();
+		<div class="inside">
+		<label for="author-email"><?php _e('E-mail') ?></label>
+		<input type="text" name="newcomment_author_email" size="50" value="" id="author-email" />
+		</div>
 
-		$actions['approve']   = "<a href='$approve_url' class='dim:the-comment-list:comment-$comment->comment_ID:unapproved:e7e7d3:e7e7d3' title='" . __( 'Approve this comment' ) . "'>" . __( 'Approve' ) . '</a> | ';
-		$actions['unapprove'] = "<a href='$unapprove_url' class='dim:the-comment-list:comment-$comment->comment_ID:unapproved:e7e7d3:e7e7d3' title='" . __( 'Unapprove this comment' ) . "'>" . __( 'Unapprove' ) . '</a> | ';
+		<div class="inside">
+		<label for="author-url"><?php _e('URL') ?></label>
+		<input type="text" id="author-url" name="newcomment_author_url" size="103" value="" />
+		</div>
+		<div style="clear:both;"></div>
+	</div>
 
-		// we're looking at list of only approved or only unapproved comments
-		if ( 'moderated' == $comment_status ) {
-			$actions['approve'] = "<a href='$approve_url' class='delete:the-comment-list:comment-$comment->comment_ID:e7e7d3:action=dim-comment' title='" . __( 'Approve this comment' ) . "'>" . __( 'Approve' ) . '</a> | ';
-			unset($actions['unapprove']);
-		} elseif ( 'approved' == $comment_status ) {
-			$actions['unapprove'] = "<a href='$unapprove_url' class='delete:the-comment-list:comment-$comment->comment_ID:e7e7d3:action=dim-comment' title='" . __( 'Unapprove this comment' ) . "'>" . __( 'Unapprove' ) . '</a> | ';
-			unset($actions['approve']);
-		}
-
-	if ( current_user_can('edit_post', $comment->comment_post_ID) ) {
-		$actions['spam']      = "<a href='$spam_url' class='delete:the-comment-list:comment-$comment->comment_ID::spam=1' title='" . __( 'Mark this comment as spam' ) . "'>" . __( 'Spam' ) . '</a> | ';
-		$actions['delete']    = "<a href='$delete_url' class='delete:the-comment-list:comment-$comment->comment_ID delete'>" . __('Delete') . '</a>';
-		foreach ( $actions as $action => $link )
-			echo "<span class='$action'>$link</span>";
-	}
-	?>
-	</td>
-  </tr>
+	<div id="replycontainer">
 	<?php
+	$quicktags_settings = array( 'buttons' => 'strong,em,link,block,del,ins,img,ul,ol,li,code,close' );
+	wp_editor( '', 'replycontent', array( 'media_buttons' => false, 'tinymce' => false, 'quicktags' => $quicktags_settings ) );
+	?>
+	</div>
+
+	<p id="replysubmit" class="submit">
+	<a href="#comments-form" class="save button-primary alignright">
+	<span id="addbtn" style="display:none;"><?php _e('Add Comment'); ?></span>
+	<span id="savebtn" style="display:none;"><?php _e('Update Comment'); ?></span>
+	<span id="replybtn" style="display:none;"><?php _e('Submit Reply'); ?></span></a>
+	<a href="#comments-form" class="cancel button-secondary alignleft"><?php _e('Cancel'); ?></a>
+	<span class="waiting spinner"></span>
+	<span class="error" style="display:none;"></span>
+	<br class="clear" />
+	</p>
+
+	<input type="hidden" name="user_ID" id="user_ID" value="<?php echo get_current_user_id(); ?>" />
+	<input type="hidden" name="action" id="action" value="" />
+	<input type="hidden" name="comment_ID" id="comment_ID" value="" />
+	<input type="hidden" name="comment_post_ID" id="comment_post_ID" value="" />
+	<input type="hidden" name="status" id="status" value="" />
+	<input type="hidden" name="position" id="position" value="<?php echo $position; ?>" />
+	<input type="hidden" name="checkbox" id="checkbox" value="<?php echo $checkbox ? 1 : 0; ?>" />
+	<input type="hidden" name="mode" id="mode" value="<?php echo esc_attr($mode); ?>" />
+	<?php
+		wp_nonce_field( 'replyto-comment', '_ajax_nonce-replyto-comment', false );
+		if ( current_user_can( 'unfiltered_html' ) )
+			wp_nonce_field( 'unfiltered-html-comment', '_wp_unfiltered_html_comment', false );
+	?>
+<?php if ( $table_row ) : ?>
+</td></tr></tbody></table>
+<?php else : ?>
+</div></div>
+<?php endif; ?>
+</form>
+<?php
 }
 
-function wp_dropdown_cats( $currentcat = 0, $currentparent = 0, $parent = 0, $level = 0, $categories = 0 ) {
-	if (!$categories )
-		$categories = get_categories( 'hide_empty=0' );
-
-	if ( $categories ) {
-		foreach ( $categories as $category ) {
-			if ( $currentcat != $category->term_id && $parent == $category->parent) {
-				$pad = str_repeat( '&#8211; ', $level );
-				$category->name = wp_specialchars( $category->name );
-				echo "\n\t<option value='$category->term_id'";
-				if ( $currentparent == $category->term_id )
-					echo " selected='selected'";
-				echo ">$pad$category->name</option>";
-				wp_dropdown_cats( $currentcat, $currentparent, $category->term_id, $level +1, $categories );
-			}
-		}
-	} else {
-		return false;
-	}
+/**
+ * Output 'undo move to trash' text for comments
+ *
+ * @since 2.9.0
+ */
+function wp_comment_trashnotice() {
+?>
+<div class="hidden" id="trash-undo-holder">
+	<div class="trash-undo-inside"><?php printf(__('Comment by %s moved to the trash.'), '<strong></strong>'); ?> <span class="undo untrash"><a href="#"><?php _e('Undo'); ?></a></span></div>
+</div>
+<div class="hidden" id="spam-undo-holder">
+	<div class="spam-undo-inside"><?php printf(__('Comment by %s marked as spam.'), '<strong></strong>'); ?> <span class="undo unspam"><a href="#"><?php _e('Undo'); ?></a></span></div>
+</div>
+<?php
 }
 
+/**
+ * {@internal Missing Short Description}}
+ *
+ * @since 1.2.0
+ *
+ * @param unknown_type $meta
+ */
 function list_meta( $meta ) {
 	// Exit if no meta
-	if (!$meta ) {
-		echo '<tbody id="the-list" class="list:meta"><tr style="display: none;"><td>&nbsp;</td></tr></tbody>'; //TBODY needed for list-manipulation JS
+	if ( ! $meta ) {
+		echo '
+<table id="list-table" style="display: none;">
+	<thead>
+	<tr>
+		<th class="left">' . _x( 'Name', 'meta name' ) . '</th>
+		<th>' . __( 'Value' ) . '</th>
+	</tr>
+	</thead>
+	<tbody id="the-list" data-wp-lists="list:meta">
+	<tr><td></td></tr>
+	</tbody>
+</table>'; //TBODY needed for list-manipulation JS
 		return;
 	}
 	$count = 0;
 ?>
+<table id="list-table">
 	<thead>
 	<tr>
-		<th><?php _e( 'Key' ) ?></th>
+		<th class="left"><?php _ex( 'Name', 'meta name' ) ?></th>
 		<th><?php _e( 'Value' ) ?></th>
-		<th colspan='2'><?php _e( 'Action' ) ?></th>
 	</tr>
 	</thead>
-	<tbody id='the-list' class='list:meta'>
+	<tbody id='the-list' data-wp-lists='list:meta'>
 <?php
 	foreach ( $meta as $entry )
 		echo _list_meta_row( $entry, $count );
-	echo "\n\t</tbody>";
+?>
+	</tbody>
+</table>
+<?php
 }
 
+/**
+ * {@internal Missing Short Description}}
+ *
+ * @since 2.5.0
+ *
+ * @param unknown_type $entry
+ * @param unknown_type $count
+ * @return unknown
+ */
 function _list_meta_row( $entry, &$count ) {
 	static $update_nonce = false;
+
+	if ( is_protected_meta( $entry['meta_key'], 'post' ) )
+		return;
+
 	if ( !$update_nonce )
 		$update_nonce = wp_create_nonce( 'add-meta' );
 
@@ -750,8 +466,6 @@ function _list_meta_row( $entry, &$count ) {
 		$style = 'alternate';
 	else
 		$style = '';
-	if ('_' == $entry['meta_key'] { 0 } )
-		$style .= ' hidden';
 
 	if ( is_serialized( $entry['meta_value'] ) ) {
 		if ( is_serialized_string( $entry['meta_value'] ) ) {
@@ -764,74 +478,108 @@ function _list_meta_row( $entry, &$count ) {
 		}
 	}
 
-	$entry['meta_key']   = attribute_escape($entry['meta_key']);
-	$entry['meta_value'] = htmlspecialchars($entry['meta_value']); // using a <textarea />
+	$entry['meta_key'] = esc_attr($entry['meta_key']);
+	$entry['meta_value'] = esc_textarea( $entry['meta_value'] ); // using a <textarea />
 	$entry['meta_id'] = (int) $entry['meta_id'];
 
 	$delete_nonce = wp_create_nonce( 'delete-meta_' . $entry['meta_id'] );
 
 	$r .= "\n\t<tr id='meta-{$entry['meta_id']}' class='$style'>";
-	$r .= "\n\t\t<td valign='top'><input name='meta[{$entry['meta_id']}][key]' tabindex='6' type='text' size='20' value='{$entry['meta_key']}' /></td>";
-	$r .= "\n\t\t<td><textarea name='meta[{$entry['meta_id']}][value]' tabindex='6' rows='2' cols='30'>{$entry['meta_value']}</textarea></td>";
-	$r .= "\n\t\t<td style='text-align: center;'><input name='updatemeta' type='submit' tabindex='6' value='".attribute_escape(__( 'Update' ))."' class='add:the-list:meta-{$entry['meta_id']}::_ajax_nonce=$update_nonce updatemeta' /><br />";
-	$r .= "\n\t\t<input name='deletemeta[{$entry['meta_id']}]' type='submit' ";
-	$r .= "class='delete:the-list:meta-{$entry['meta_id']}::_ajax_nonce=$delete_nonce deletemeta' tabindex='6' value='".attribute_escape(__( 'Delete' ))."' />";
+	$r .= "\n\t\t<td class='left'><label class='screen-reader-text' for='meta[{$entry['meta_id']}][key]'>" . __( 'Key' ) . "</label><input name='meta[{$entry['meta_id']}][key]' id='meta[{$entry['meta_id']}][key]' type='text' size='20' value='{$entry['meta_key']}' />";
+
+	$r .= "\n\t\t<div class='submit'>";
+	$r .= get_submit_button( __( 'Delete' ), 'deletemeta small', "deletemeta[{$entry['meta_id']}]", false, array( 'data-wp-lists' => "delete:the-list:meta-{$entry['meta_id']}::_ajax_nonce=$delete_nonce" ) );
+	$r .= "\n\t\t";
+	$r .= get_submit_button( __( 'Update' ), 'updatemeta small', "meta-{$entry['meta_id']}-submit", false, array( 'data-wp-lists' => "add:the-list:meta-{$entry['meta_id']}::_ajax_nonce-add-meta=$update_nonce" ) );
+	$r .= "</div>";
 	$r .= wp_nonce_field( 'change-meta', '_ajax_nonce', false, false );
-	$r .= "</td>\n\t</tr>";
+	$r .= "</td>";
+
+	$r .= "\n\t\t<td><label class='screen-reader-text' for='meta[{$entry['meta_id']}][value]'>" . __( 'Value' ) . "</label><textarea name='meta[{$entry['meta_id']}][value]' id='meta[{$entry['meta_id']}][value]' rows='2' cols='30'>{$entry['meta_value']}</textarea></td>\n\t</tr>";
 	return $r;
 }
 
+/**
+ * {@internal Missing Short Description}}
+ *
+ * @since 1.2.0
+ */
 function meta_form() {
 	global $wpdb;
 	$limit = (int) apply_filters( 'postmeta_form_limit', 30 );
 	$keys = $wpdb->get_col( "
 		SELECT meta_key
 		FROM $wpdb->postmeta
-		WHERE meta_key NOT LIKE '\_%'
 		GROUP BY meta_key
-		ORDER BY meta_id DESC
+		HAVING meta_key NOT LIKE '\_%'
+		ORDER BY meta_key
 		LIMIT $limit" );
 	if ( $keys )
 		natcasesort($keys);
 ?>
-<p><strong><?php _e( 'Add a new custom field:' ) ?></strong></p>
-<table id="newmeta" cellspacing="3" cellpadding="3">
-	<tr>
-<th colspan="2"><?php _e( 'Key' ) ?></th>
-<th><?php _e( 'Value' ) ?></th>
+<p><strong><?php _e( 'Add New Custom Field:' ) ?></strong></p>
+<table id="newmeta">
+<thead>
+<tr>
+<th class="left"><label for="metakeyselect"><?php _ex( 'Name', 'meta name' ) ?></label></th>
+<th><label for="metavalue"><?php _e( 'Value' ) ?></label></th>
 </tr>
-	<tr valign="top">
-		<td style="width: 18%;" class="textright">
-<?php if ( $keys ) : ?>
-<select id="metakeyselect" name="metakeyselect" tabindex="7">
-<option value="#NONE#"><?php _e( '- Select -' ); ?></option>
+</thead>
+
+<tbody>
+<tr>
+<td id="newmetaleft" class="left">
+<?php if ( $keys ) { ?>
+<select id="metakeyselect" name="metakeyselect">
+<option value="#NONE#"><?php _e( '&mdash; Select &mdash;' ); ?></option>
 <?php
 
 	foreach ( $keys as $key ) {
-		$key = attribute_escape( $key );
-		echo "\n\t<option value='$key'>$key</option>";
+		if ( is_protected_meta( $key, 'post' ) )
+			continue;
+		echo "\n<option value='" . esc_attr($key) . "'>" . esc_html($key) . "</option>";
 	}
 ?>
-</select> <?php _e( 'or' ); ?>
-<?php endif; ?>
+</select>
+<input class="hide-if-js" type="text" id="metakeyinput" name="metakeyinput" value="" />
+<a href="#postcustomstuff" class="hide-if-no-js" onclick="jQuery('#metakeyinput, #metakeyselect, #enternew, #cancelnew').toggle();return false;">
+<span id="enternew"><?php _e('Enter new'); ?></span>
+<span id="cancelnew" class="hidden"><?php _e('Cancel'); ?></span></a>
+<?php } else { ?>
+<input type="text" id="metakeyinput" name="metakeyinput" value="" />
+<?php } ?>
 </td>
-<td><input type="text" id="metakeyinput" name="metakeyinput" tabindex="7" /></td>
-		<td><textarea id="metavalue" name="metavalue" rows="3" cols="25" tabindex="8"></textarea></td>
-	</tr>
-<tr class="submit"><td colspan="3">
-	<?php wp_nonce_field( 'add-meta', '_ajax_nonce', false ); ?>
-	<input type="submit" id="addmetasub" name="addmeta" class="add:the-list:newmeta::post_id=<?php echo $GLOBALS['post_ID'] ? $GLOBALS['post_ID'] : $GLOBALS['temp_ID']; ?>" tabindex="9" value="<?php _e( 'Add Custom Field' ) ?>" />
+<td><textarea id="metavalue" name="metavalue" rows="2" cols="25"></textarea></td>
+</tr>
+
+<tr><td colspan="2">
+<div class="submit">
+<?php submit_button( __( 'Add Custom Field' ), 'secondary', 'addmeta', false, array( 'id' => 'newmeta-submit', 'data-wp-lists' => 'add:the-list:newmeta' ) ); ?>
+</div>
+<?php wp_nonce_field( 'add-meta', '_ajax_nonce-add-meta', false ); ?>
 </td></tr>
+</tbody>
 </table>
 <?php
 
 }
 
-function touch_time( $edit = 1, $for_post = 1, $tab_index = 0 ) {
-	global $wp_locale, $post, $comment;
+/**
+ * {@internal Missing Short Description}}
+ *
+ * @since 0.71
+ *
+ * @param unknown_type $edit
+ * @param unknown_type $for_post
+ * @param unknown_type $tab_index
+ * @param unknown_type $multi
+ */
+function touch_time( $edit = 1, $for_post = 1, $tab_index = 0, $multi = 0 ) {
+	global $wp_locale, $comment;
+	$post = get_post();
 
 	if ( $for_post )
-		$edit = ( in_array($post->post_status, array('draft', 'pending') ) && (!$post->post_date || '0000-00-00 00:00:00' == $post->post_date ) ) ? false : true;
+		$edit = ! ( in_array($post->post_status, array('draft', 'pending') ) && (!$post->post_date_gmt || '0000-00-00 00:00:00' == $post->post_date_gmt ) );
 
 	$tab_index_attribute = '';
 	if ( (int) $tab_index > 0 )
@@ -839,38 +587,67 @@ function touch_time( $edit = 1, $for_post = 1, $tab_index = 0 ) {
 
 	// echo '<label for="timestamp" style="display: block;"><input type="checkbox" class="checkbox" name="edit_date" value="1" id="timestamp"'.$tab_index_attribute.' /> '.__( 'Edit timestamp' ).'</label><br />';
 
-	$time_adj = time() + (get_option( 'gmt_offset' ) * 3600 );
+	$time_adj = current_time('timestamp');
 	$post_date = ($for_post) ? $post->post_date : $comment->comment_date;
-	$jj = ($edit) ? mysql2date( 'd', $post_date ) : gmdate( 'd', $time_adj );
-	$mm = ($edit) ? mysql2date( 'm', $post_date ) : gmdate( 'm', $time_adj );
-	$aa = ($edit) ? mysql2date( 'Y', $post_date ) : gmdate( 'Y', $time_adj );
-	$hh = ($edit) ? mysql2date( 'H', $post_date ) : gmdate( 'H', $time_adj );
-	$mn = ($edit) ? mysql2date( 'i', $post_date ) : gmdate( 'i', $time_adj );
-	$ss = ($edit) ? mysql2date( 's', $post_date ) : gmdate( 's', $time_adj );
+	$jj = ($edit) ? mysql2date( 'd', $post_date, false ) : gmdate( 'd', $time_adj );
+	$mm = ($edit) ? mysql2date( 'm', $post_date, false ) : gmdate( 'm', $time_adj );
+	$aa = ($edit) ? mysql2date( 'Y', $post_date, false ) : gmdate( 'Y', $time_adj );
+	$hh = ($edit) ? mysql2date( 'H', $post_date, false ) : gmdate( 'H', $time_adj );
+	$mn = ($edit) ? mysql2date( 'i', $post_date, false ) : gmdate( 'i', $time_adj );
+	$ss = ($edit) ? mysql2date( 's', $post_date, false ) : gmdate( 's', $time_adj );
 
-	$month = "<select id=\"mm\" name=\"mm\"$tab_index_attribute>\n";
+	$cur_jj = gmdate( 'd', $time_adj );
+	$cur_mm = gmdate( 'm', $time_adj );
+	$cur_aa = gmdate( 'Y', $time_adj );
+	$cur_hh = gmdate( 'H', $time_adj );
+	$cur_mn = gmdate( 'i', $time_adj );
+
+	$month = "<select " . ( $multi ? '' : 'id="mm" ' ) . "name=\"mm\"$tab_index_attribute>\n";
 	for ( $i = 1; $i < 13; $i = $i +1 ) {
-		$month .= "\t\t\t" . '<option value="' . zeroise($i, 2) . '"';
+		$monthnum = zeroise($i, 2);
+		$month .= "\t\t\t" . '<option value="' . $monthnum . '"';
 		if ( $i == $mm )
 			$month .= ' selected="selected"';
-		$month .= '>' . $wp_locale->get_month( $i ) . "</option>\n";
+		/* translators: 1: month number (01, 02, etc.), 2: month abbreviation */
+		$month .= '>' . sprintf( __( '%1$s-%2$s' ), $monthnum, $wp_locale->get_month_abbrev( $wp_locale->get_month( $i ) ) ) . "</option>\n";
 	}
 	$month .= '</select>';
 
-	$day = '<input type="text" id="jj" name="jj" value="' . $jj . '" size="2" maxlength="2"' . $tab_index_attribute . ' autocomplete="off"  />';
-	$year = '<input type="text" id="aa" name="aa" value="' . $aa . '" size="4" maxlength="5"' . $tab_index_attribute . ' autocomplete="off"  />';
-	$hour = '<input type="text" id="hh" name="hh" value="' . $hh . '" size="2" maxlength="2"' . $tab_index_attribute . ' autocomplete="off"  />';
-	$minute = '<input type="text" id="mn" name="mn" value="' . $mn . '" size="2" maxlength="2"' . $tab_index_attribute . ' autocomplete="off"  />';
-	printf(_c('%1$s%2$s, %3$s <br />@ %4$s : %5$s|1: month input, 2: day input, 3: year input, 4: hour input, 5: minute input'), $month, $day, $year, $hour, $minute);
+	$day = '<input type="text" ' . ( $multi ? '' : 'id="jj" ' ) . 'name="jj" value="' . $jj . '" size="2" maxlength="2"' . $tab_index_attribute . ' autocomplete="off" />';
+	$year = '<input type="text" ' . ( $multi ? '' : 'id="aa" ' ) . 'name="aa" value="' . $aa . '" size="4" maxlength="4"' . $tab_index_attribute . ' autocomplete="off" />';
+	$hour = '<input type="text" ' . ( $multi ? '' : 'id="hh" ' ) . 'name="hh" value="' . $hh . '" size="2" maxlength="2"' . $tab_index_attribute . ' autocomplete="off" />';
+	$minute = '<input type="text" ' . ( $multi ? '' : 'id="mn" ' ) . 'name="mn" value="' . $mn . '" size="2" maxlength="2"' . $tab_index_attribute . ' autocomplete="off" />';
+
+	echo '<div class="timestamp-wrap">';
+	/* translators: 1: month, 2: day, 3: year, 4: hour, 5: minute */
+	printf( __( '%1$s %2$s, %3$s @ %4$s : %5$s' ), $month, $day, $year, $hour, $minute );
+
+	echo '</div><input type="hidden" id="ss" name="ss" value="' . $ss . '" />';
+
+	if ( $multi ) return;
+
 	echo "\n\n";
-	foreach ( array('mm', 'jj', 'aa', 'hh', 'mn') as $timeunit )
+	foreach ( array('mm', 'jj', 'aa', 'hh', 'mn') as $timeunit ) {
 		echo '<input type="hidden" id="hidden_' . $timeunit . '" name="hidden_' . $timeunit . '" value="' . $$timeunit . '" />' . "\n";
+		$cur_timeunit = 'cur_' . $timeunit;
+		echo '<input type="hidden" id="'. $cur_timeunit . '" name="'. $cur_timeunit . '" value="' . $$cur_timeunit . '" />' . "\n";
+	}
 ?>
 
-<input type="hidden" id="ss" name="ss" value="<?php echo $ss ?>" size="2" maxlength="2" />
+<p>
+<a href="#edit_timestamp" class="save-timestamp hide-if-no-js button"><?php _e('OK'); ?></a>
+<a href="#edit_timestamp" class="cancel-timestamp hide-if-no-js"><?php _e('Cancel'); ?></a>
+</p>
 <?php
 }
 
+/**
+ * {@internal Missing Short Description}}
+ *
+ * @since 1.5.0
+ *
+ * @param unknown_type $default
+ */
 function page_template_dropdown( $default = '' ) {
 	$templates = get_page_templates();
 	ksort( $templates );
@@ -883,25 +660,34 @@ function page_template_dropdown( $default = '' ) {
 	endforeach;
 }
 
+/**
+ * {@internal Missing Short Description}}
+ *
+ * @since 1.5.0
+ *
+ * @param unknown_type $default
+ * @param unknown_type $parent
+ * @param unknown_type $level
+ * @return unknown
+ */
 function parent_dropdown( $default = 0, $parent = 0, $level = 0 ) {
-	global $wpdb, $post_ID;
-	$items = $wpdb->get_results( "SELECT ID, post_parent, post_title FROM $wpdb->posts WHERE post_parent = $parent AND post_type = 'page' ORDER BY menu_order" );
+	global $wpdb;
+	$post = get_post();
+	$items = $wpdb->get_results( $wpdb->prepare("SELECT ID, post_parent, post_title FROM $wpdb->posts WHERE post_parent = %d AND post_type = 'page' ORDER BY menu_order", $parent) );
 
 	if ( $items ) {
 		foreach ( $items as $item ) {
 			// A page cannot be its own parent.
-			if (!empty ( $post_ID ) ) {
-				if ( $item->ID == $post_ID ) {
-					continue;
-				}
-			}
+			if ( $post && $post->ID && $item->ID == $post->ID )
+				continue;
+
 			$pad = str_repeat( '&nbsp;', $level * 3 );
 			if ( $item->ID == $default)
 				$current = ' selected="selected"';
 			else
 				$current = '';
 
-			echo "\n\t<option value='$item->ID'$current>$pad " . wp_specialchars($item->post_title) . "</option>";
+			echo "\n\t<option class='level-$level' value='$item->ID'$current>$pad " . esc_html($item->post_title) . "</option>";
 			parent_dropdown( $default, $item->ID, $level +1 );
 		}
 	} else {
@@ -909,24 +695,22 @@ function parent_dropdown( $default = 0, $parent = 0, $level = 0 ) {
 	}
 }
 
-function browse_happy() {
-	$getit = __( 'WordPress recommends a better browser' );
-	echo '
-		<span id="bh" class="alignright"><a href="http://browsehappy.com/" title="'.$getit.'"><img src="images/browse-happy.gif" alt="Browse Happy" /></a></span>
-		';
-}
-
-if (strpos($_SERVER['HTTP_USER_AGENT'], 'MSIE') !== false)
-	add_action( 'in_admin_footer', 'browse_happy' );
-
+/**
+ * {@internal Missing Short Description}}
+ *
+ * @since 2.0.0
+ *
+ * @param unknown_type $id
+ * @return unknown
+ */
 function the_attachment_links( $id = false ) {
 	$id = (int) $id;
-	$post = & get_post( $id );
+	$post = get_post( $id );
 
 	if ( $post->post_type != 'attachment' )
 		return false;
 
-	$icon = get_attachment_icon( $post->ID );
+	$icon = wp_get_attachment_image( $post->ID, 'thumbnail', true );
 	$attachment_data = wp_get_attachment_metadata( $id );
 	$thumb = isset( $attachment_data['thumb'] );
 ?>
@@ -936,7 +720,7 @@ function the_attachment_links( $id = false ) {
 	<col class="widefat" />
 	<tr>
 		<th scope="row"><?php _e( 'URL' ) ?></th>
-		<td><textarea rows="1" cols="40" type="text" class="attachmentlinks" readonly="readonly"><?php echo wp_get_attachment_url(); ?></textarea></td>
+		<td><textarea rows="1" cols="40" type="text" class="attachmentlinks" readonly="readonly"><?php echo esc_textarea( wp_get_attachment_url() ); ?></textarea></td>
 	</tr>
 <?php if ( $icon ) : ?>
 	<tr>
@@ -950,7 +734,7 @@ function the_attachment_links( $id = false ) {
 <?php else : ?>
 	<tr>
 		<th scope="row"><?php _e( 'Link to file' ) ?></th>
-		<td><textarea rows="1" cols="40" type="text" class="attachmentlinks" readonly="readonly"><a href="<?php echo wp_get_attachment_url(); ?>" class="attachmentlink"><?php echo basename( wp_get_attachment_url() );  ?></a></textarea></td>
+		<td><textarea rows="1" cols="40" type="text" class="attachmentlinks" readonly="readonly"><a href="<?php echo wp_get_attachment_url(); ?>" class="attachmentlink"><?php echo basename( wp_get_attachment_url() ); ?></a></textarea></td>
 	</tr>
 	<tr>
 		<th scope="row"><?php _e( 'Link to page' ) ?></th>
@@ -962,110 +746,1182 @@ function the_attachment_links( $id = false ) {
 <?php
 }
 
-function wp_dropdown_roles( $default = false ) {
-	global $wp_roles;
+/**
+ * Print out <option> html elements for role selectors
+ *
+ * @since 2.1.0
+ *
+ * @param string $selected slug for the role that should be already selected
+ */
+function wp_dropdown_roles( $selected = false ) {
+	$p = '';
 	$r = '';
-	foreach( $wp_roles->role_names as $role => $name ) {
-		$name = translate_with_context($name);
-		if ( $default == $role ) // Make default first in list
-			$p = "\n\t<option selected='selected' value='$role'>$name</option>";
+
+	$editable_roles = get_editable_roles();
+
+	foreach ( $editable_roles as $role => $details ) {
+		$name = translate_user_role($details['name'] );
+		if ( $selected == $role ) // preselect specified role
+			$p = "\n\t<option selected='selected' value='" . esc_attr($role) . "'>$name</option>";
 		else
-			$r .= "\n\t<option value='$role'>$name</option>";
+			$r .= "\n\t<option value='" . esc_attr($role) . "'>$name</option>";
 	}
 	echo $p . $r;
 }
 
-function wp_convert_hr_to_bytes( $size ) {
-	$size = strtolower($size);
-	$bytes = (int) $size;
-	if ( strpos($size, 'k') !== false )
-		$bytes = intval($size) * 1024;
-	elseif ( strpos($size, 'm') !== false )
-		$bytes = intval($size) * 1024 * 1024;
-	elseif ( strpos($size, 'g') !== false )
-		$bytes = intval($size) * 1024 * 1024 * 1024;
-	return $bytes;
-}
-
-function wp_convert_bytes_to_hr( $bytes ) {
-	$units = array( 0 => 'B', 1 => 'kB', 2 => 'MB', 3 => 'GB' );
-	$log = log( $bytes, 1024 );
-	$power = (int) $log;
-	$size = pow(1024, $log - $power);
-	return $size . $units[$power];
-}
-
-function wp_max_upload_size() {
-	$u_bytes = wp_convert_hr_to_bytes( ini_get( 'upload_max_filesize' ) );
-	$p_bytes = wp_convert_hr_to_bytes( ini_get( 'post_max_size' ) );
-	$bytes = apply_filters( 'upload_size_limit', min($u_bytes, $p_bytes), $u_bytes, $p_bytes );
-	return $bytes;
-}
-
+/**
+ * Outputs the form used by the importers to accept the data to be imported
+ *
+ * @since 2.0.0
+ *
+ * @param string $action The action attribute for the form.
+ */
 function wp_import_upload_form( $action ) {
 	$bytes = apply_filters( 'import_upload_size_limit', wp_max_upload_size() );
-	$size = wp_convert_bytes_to_hr( $bytes );
+	$size = size_format( $bytes );
+	$upload_dir = wp_upload_dir();
+	if ( ! empty( $upload_dir['error'] ) ) :
+		?><div class="error"><p><?php _e('Before you can upload your import file, you will need to fix the following error:'); ?></p>
+		<p><strong><?php echo $upload_dir['error']; ?></strong></p></div><?php
+	else :
 ?>
-<form enctype="multipart/form-data" id="import-upload-form" method="post" action="<?php echo attribute_escape($action) ?>">
+<form enctype="multipart/form-data" id="import-upload-form" method="post" class="wp-upload-form" action="<?php echo esc_url( wp_nonce_url( $action, 'import-upload' ) ); ?>">
 <p>
-<?php wp_nonce_field('import-upload'); ?>
 <label for="upload"><?php _e( 'Choose a file from your computer:' ); ?></label> (<?php printf( __('Maximum size: %s' ), $size ); ?>)
 <input type="file" id="upload" name="import" size="25" />
 <input type="hidden" name="action" value="save" />
 <input type="hidden" name="max_file_size" value="<?php echo $bytes; ?>" />
 </p>
-<p class="submit">
-<input type="submit" class="button" value="<?php _e( 'Upload file and import' ); ?>" />
-</p>
+<?php submit_button( __('Upload file and import'), 'button' ); ?>
 </form>
 <?php
-}
-
-function wp_remember_old_slug() {
-	global $post;
-	$name = attribute_escape($post->post_name); // just in case
-	if ( strlen($name) )
-		echo '<input type="hidden" id="wp-old-slug" name="wp-old-slug" value="' . $name . '" />';
+	endif;
 }
 
 /**
- * add_meta_box() - Add a meta box to an edit form
+ * Add a meta box to an edit form.
  *
- * @since 2.5
+ * @since 2.5.0
  *
  * @param string $id String for use in the 'id' attribute of tags.
- * @param string $title Title of the meta box
- * @param string $callback Function that fills the box with the desired content.  The function should echo its output.
- * @param string $page The type of edit page on which to show the box (post, page, link)
- * @param string $context The context within the page where the boxes should show ('normal', 'advanced')
+ * @param string $title Title of the meta box.
+ * @param string $callback Function that fills the box with the desired content. The function should echo its output.
+ * @param string|object $screen Optional. The screen on which to show the box (post, page, link). Defaults to current screen.
+ * @param string $context Optional. The context within the page where the boxes should show ('normal', 'advanced').
+ * @param string $priority Optional. The priority within the context where the boxes should show ('high', 'low').
+ * @param array $callback_args Optional. Data that should be set as the "args" property of the box array (which is the second parameter passed to your callback).
  */
-function add_meta_box($id, $title, $callback, $page, $context = 'advanced') {
+function add_meta_box( $id, $title, $callback, $screen = null, $context = 'advanced', $priority = 'default', $callback_args = null ) {
 	global $wp_meta_boxes;
 
-	if  ( !isset($wp_meta_boxes) )
+	if ( empty( $screen ) )
+		$screen = get_current_screen();
+	elseif ( is_string( $screen ) )
+		$screen = convert_to_screen( $screen );
+
+	$page = $screen->id;
+
+	if ( !isset($wp_meta_boxes) )
 		$wp_meta_boxes = array();
 	if ( !isset($wp_meta_boxes[$page]) )
 		$wp_meta_boxes[$page] = array();
 	if ( !isset($wp_meta_boxes[$page][$context]) )
 		$wp_meta_boxes[$page][$context] = array();
 
-	$wp_meta_boxes[$page][$context][] = array('id' => $id, 'title' => $title, 'callback' => $callback);
+	foreach ( array_keys($wp_meta_boxes[$page]) as $a_context ) {
+		foreach ( array('high', 'core', 'default', 'low') as $a_priority ) {
+			if ( !isset($wp_meta_boxes[$page][$a_context][$a_priority][$id]) )
+				continue;
+
+			// If a core box was previously added or removed by a plugin, don't add.
+			if ( 'core' == $priority ) {
+				// If core box previously deleted, don't add
+				if ( false === $wp_meta_boxes[$page][$a_context][$a_priority][$id] )
+					return;
+				// If box was added with default priority, give it core priority to maintain sort order
+				if ( 'default' == $a_priority ) {
+					$wp_meta_boxes[$page][$a_context]['core'][$id] = $wp_meta_boxes[$page][$a_context]['default'][$id];
+					unset($wp_meta_boxes[$page][$a_context]['default'][$id]);
+				}
+				return;
+			}
+			// If no priority given and id already present, use existing priority
+			if ( empty($priority) ) {
+				$priority = $a_priority;
+			// else if we're adding to the sorted priority, we don't know the title or callback. Grab them from the previously added context/priority.
+			} elseif ( 'sorted' == $priority ) {
+				$title = $wp_meta_boxes[$page][$a_context][$a_priority][$id]['title'];
+				$callback = $wp_meta_boxes[$page][$a_context][$a_priority][$id]['callback'];
+				$callback_args = $wp_meta_boxes[$page][$a_context][$a_priority][$id]['args'];
+			}
+			// An id can be in only one priority and one context
+			if ( $priority != $a_priority || $context != $a_context )
+				unset($wp_meta_boxes[$page][$a_context][$a_priority][$id]);
+		}
+	}
+
+	if ( empty($priority) )
+		$priority = 'low';
+
+	if ( !isset($wp_meta_boxes[$page][$context][$priority]) )
+		$wp_meta_boxes[$page][$context][$priority] = array();
+
+	$wp_meta_boxes[$page][$context][$priority][$id] = array('id' => $id, 'title' => $title, 'callback' => $callback, 'args' => $callback_args);
 }
 
-function do_meta_boxes($page, $context, $object) {
+/**
+ * Meta-Box template function
+ *
+ * @since 2.5.0
+ *
+ * @param string|object $screen Screen identifier
+ * @param string $context box context
+ * @param mixed $object gets passed to the box callback function as first parameter
+ * @return int number of meta_boxes
+ */
+function do_meta_boxes( $screen, $context, $object ) {
+	global $wp_meta_boxes;
+	static $already_sorted = false;
+
+	if ( empty( $screen ) )
+		$screen = get_current_screen();
+	elseif ( is_string( $screen ) )
+		$screen = convert_to_screen( $screen );
+
+	$page = $screen->id;
+
+	$hidden = get_hidden_meta_boxes( $screen );
+
+	printf('<div id="%s-sortables" class="meta-box-sortables">', htmlspecialchars($context));
+
+	$i = 0;
+	do {
+		// Grab the ones the user has manually sorted. Pull them out of their previous context/priority and into the one the user chose
+		if ( !$already_sorted && $sorted = get_user_option( "meta-box-order_$page" ) ) {
+			foreach ( $sorted as $box_context => $ids ) {
+				foreach ( explode(',', $ids ) as $id ) {
+					if ( $id && 'dashboard_browser_nag' !== $id )
+						add_meta_box( $id, null, null, $screen, $box_context, 'sorted' );
+				}
+			}
+		}
+		$already_sorted = true;
+
+		if ( !isset($wp_meta_boxes) || !isset($wp_meta_boxes[$page]) || !isset($wp_meta_boxes[$page][$context]) )
+			break;
+
+		foreach ( array('high', 'sorted', 'core', 'default', 'low') as $priority ) {
+			if ( isset($wp_meta_boxes[$page][$context][$priority]) ) {
+				foreach ( (array) $wp_meta_boxes[$page][$context][$priority] as $box ) {
+					if ( false == $box || ! $box['title'] )
+						continue;
+					$i++;
+					$hidden_class = in_array($box['id'], $hidden) ? ' hide-if-js' : '';
+					echo '<div id="' . $box['id'] . '" class="postbox ' . postbox_classes($box['id'], $page) . $hidden_class . '" ' . '>' . "\n";
+					if ( 'dashboard_browser_nag' != $box['id'] )
+						echo '<div class="handlediv" title="' . esc_attr__('Click to toggle') . '"><br /></div>';
+					echo "<h3 class='hndle'><span>{$box['title']}</span></h3>\n";
+					echo '<div class="inside">' . "\n";
+					call_user_func($box['callback'], $object, $box);
+					echo "</div>\n";
+					echo "</div>\n";
+				}
+			}
+		}
+	} while(0);
+
+	echo "</div>";
+
+	return $i;
+
+}
+
+/**
+ * Remove a meta box from an edit form.
+ *
+ * @since 2.6.0
+ *
+ * @param string $id String for use in the 'id' attribute of tags.
+ * @param string|object $screen The screen on which to show the box (post, page, link).
+ * @param string $context The context within the page where the boxes should show ('normal', 'advanced').
+ */
+function remove_meta_box($id, $screen, $context) {
 	global $wp_meta_boxes;
 
-	if ( !isset($wp_meta_boxes) || !isset($wp_meta_boxes[$page]) || !isset($wp_meta_boxes[$page][$context]) )
+	if ( empty( $screen ) )
+		$screen = get_current_screen();
+	elseif ( is_string( $screen ) )
+		$screen = convert_to_screen( $screen );
+
+	$page = $screen->id;
+
+	if ( !isset($wp_meta_boxes) )
+		$wp_meta_boxes = array();
+	if ( !isset($wp_meta_boxes[$page]) )
+		$wp_meta_boxes[$page] = array();
+	if ( !isset($wp_meta_boxes[$page][$context]) )
+		$wp_meta_boxes[$page][$context] = array();
+
+	foreach ( array('high', 'core', 'default', 'low') as $priority )
+		$wp_meta_boxes[$page][$context][$priority][$id] = false;
+}
+
+/**
+ * Meta Box Accordion Template Function
+ *
+ * Largely made up of abstracted code from {@link do_meta_boxes()}, this
+ * function serves to build meta boxes as list items for display as
+ * a collapsible accordion.
+ *
+ * @since 3.6.0
+ *
+ * @uses global $wp_meta_boxes Used to retrieve registered meta boxes.
+ *
+ * @param string|object $screen The screen identifier.
+ * @param string $context The meta box context.
+ * @param mixed $object gets passed to the section callback function as first parameter.
+ * @return int number of meta boxes as accordion sections.
+ */
+function do_accordion_sections( $screen, $context, $object ) {
+	global $wp_meta_boxes;
+
+	if ( empty( $screen ) )
+		$screen = get_current_screen();
+	elseif ( is_string( $screen ) )
+		$screen = convert_to_screen( $screen );
+
+	$page = $screen->id;
+
+	$hidden = get_hidden_meta_boxes( $screen );
+	?>
+	<div id="side-sortables" class="accordion-container">
+		<ul class="outer-border">
+	<?php
+	$i = 0;
+	do {
+		if ( ! isset( $wp_meta_boxes ) || ! isset( $wp_meta_boxes[$page] ) || ! isset( $wp_meta_boxes[$page][$context] ) )
+			break;
+
+		foreach ( array( 'high', 'sorted', 'core', 'default', 'low' ) as $priority ) {
+			if ( isset( $wp_meta_boxes[$page][$context][$priority] ) ) {
+				foreach ( $wp_meta_boxes[$page][$context][$priority] as $box ) {
+					if ( false == $box || ! $box['title'] )
+						continue;
+					$i++;
+					$hidden_class = in_array( $box['id'], $hidden ) ? 'hide-if-js' : '';
+					?>
+					<li class="control-section accordion-section <?php echo $hidden_class; ?> <?php echo esc_attr( $box['id'] ); ?>" id="<?php echo esc_attr( $box['id'] ); ?>">
+						<h3 class="accordion-section-title hndle" tabindex="0" title="<?php echo esc_attr( $box['title'] ); ?>"><?php echo esc_html( $box['title'] ); ?></h3>
+						<div class="accordion-section-content <?php postbox_classes( $box['id'], $page ); ?>">
+							<div class="inside">
+								<?php call_user_func( $box['callback'], $object, $box ); ?>
+							</div><!-- .inside -->
+						</div><!-- .accordion-section-content -->
+					</li><!-- .accordion-section -->
+					<?php
+				}
+			}
+		}
+	} while(0);
+	?>
+		</ul><!-- .outer-border -->
+	</div><!-- .accordion-container -->
+	<?php
+	return $i;
+}
+
+/**
+ * Add a new section to a settings page.
+ *
+ * Part of the Settings API. Use this to define new settings sections for an admin page.
+ * Show settings sections in your admin page callback function with do_settings_sections().
+ * Add settings fields to your section with add_settings_field()
+ *
+ * The $callback argument should be the name of a function that echoes out any
+ * content you want to show at the top of the settings section before the actual
+ * fields. It can output nothing if you want.
+ *
+ * @since 2.7.0
+ *
+ * @global $wp_settings_sections Storage array of all settings sections added to admin pages
+ *
+ * @param string $id Slug-name to identify the section. Used in the 'id' attribute of tags.
+ * @param string $title Formatted title of the section. Shown as the heading for the section.
+ * @param string $callback Function that echos out any content at the top of the section (between heading and fields).
+ * @param string $page The slug-name of the settings page on which to show the section. Built-in pages include 'general', 'reading', 'writing', 'discussion', 'media', etc. Create your own using add_options_page();
+ */
+function add_settings_section($id, $title, $callback, $page) {
+	global $wp_settings_sections;
+
+	if ( 'misc' == $page ) {
+		_deprecated_argument( __FUNCTION__, '3.0', sprintf( __( 'The "%s" options group has been removed. Use another settings group.' ), 'misc' ) );
+		$page = 'general';
+	}
+
+	if ( 'privacy' == $page ) {
+		_deprecated_argument( __FUNCTION__, '3.5', sprintf( __( 'The "%s" options group has been removed. Use another settings group.' ), 'privacy' ) );
+		$page = 'reading';
+	}
+
+	if ( !isset($wp_settings_sections) )
+		$wp_settings_sections = array();
+	if ( !isset($wp_settings_sections[$page]) )
+		$wp_settings_sections[$page] = array();
+	if ( !isset($wp_settings_sections[$page][$id]) )
+		$wp_settings_sections[$page][$id] = array();
+
+	$wp_settings_sections[$page][$id] = array('id' => $id, 'title' => $title, 'callback' => $callback);
+}
+
+/**
+ * Add a new field to a section of a settings page
+ *
+ * Part of the Settings API. Use this to define a settings field that will show
+ * as part of a settings section inside a settings page. The fields are shown using
+ * do_settings_fields() in do_settings-sections()
+ *
+ * The $callback argument should be the name of a function that echoes out the
+ * html input tags for this setting field. Use get_option() to retrieve existing
+ * values to show.
+ *
+ * @since 2.7.0
+ *
+ * @global $wp_settings_fields Storage array of settings fields and info about their pages/sections
+ *
+ * @param string $id Slug-name to identify the field. Used in the 'id' attribute of tags.
+ * @param string $title Formatted title of the field. Shown as the label for the field during output.
+ * @param string $callback Function that fills the field with the desired form inputs. The function should echo its output.
+ * @param string $page The slug-name of the settings page on which to show the section (general, reading, writing, ...).
+ * @param string $section The slug-name of the section of the settings page in which to show the box (default, ...).
+ * @param array $args Additional arguments
+ */
+function add_settings_field($id, $title, $callback, $page, $section = 'default', $args = array()) {
+	global $wp_settings_fields;
+
+	if ( 'misc' == $page ) {
+		_deprecated_argument( __FUNCTION__, '3.0', __( 'The miscellaneous options group has been removed. Use another settings group.' ) );
+		$page = 'general';
+	}
+
+	if ( 'privacy' == $page ) {
+		_deprecated_argument( __FUNCTION__, '3.5', __( 'The privacy options group has been removed. Use another settings group.' ) );
+		$page = 'reading';
+	}
+
+	if ( !isset($wp_settings_fields) )
+		$wp_settings_fields = array();
+	if ( !isset($wp_settings_fields[$page]) )
+		$wp_settings_fields[$page] = array();
+	if ( !isset($wp_settings_fields[$page][$section]) )
+		$wp_settings_fields[$page][$section] = array();
+
+	$wp_settings_fields[$page][$section][$id] = array('id' => $id, 'title' => $title, 'callback' => $callback, 'args' => $args);
+}
+
+/**
+ * Prints out all settings sections added to a particular settings page
+ *
+ * Part of the Settings API. Use this in a settings page callback function
+ * to output all the sections and fields that were added to that $page with
+ * add_settings_section() and add_settings_field()
+ *
+ * @global $wp_settings_sections Storage array of all settings sections added to admin pages
+ * @global $wp_settings_fields Storage array of settings fields and info about their pages/sections
+ * @since 2.7.0
+ *
+ * @param string $page The slug name of the page whos settings sections you want to output
+ */
+function do_settings_sections( $page ) {
+	global $wp_settings_sections, $wp_settings_fields;
+
+	if ( ! isset( $wp_settings_sections ) || !isset( $wp_settings_sections[$page] ) )
 		return;
 
-	foreach ( (array) $wp_meta_boxes[$page][$context] as $box ) {
-		echo '<div id="' . $box['id'] . '" class="postbox ' . postbox_classes($box['id'], $page) . '">' . "\n";
-		echo "<h3>{$box['title']}</h3>\n";
-		echo '<div class="inside">' . "\n";
-		call_user_func($box['callback'], $object, $box);
-		echo "</div>\n";
-		echo "</div>\n";
+	foreach ( (array) $wp_settings_sections[$page] as $section ) {
+		if ( $section['title'] )
+			echo "<h3>{$section['title']}</h3>\n";
+
+		if ( $section['callback'] )
+			call_user_func( $section['callback'], $section );
+
+		if ( ! isset( $wp_settings_fields ) || !isset( $wp_settings_fields[$page] ) || !isset( $wp_settings_fields[$page][$section['id']] ) )
+			continue;
+		echo '<table class="form-table">';
+		do_settings_fields( $page, $section['id'] );
+		echo '</table>';
 	}
 }
 
+/**
+ * Print out the settings fields for a particular settings section
+ *
+ * Part of the Settings API. Use this in a settings page to output
+ * a specific section. Should normally be called by do_settings_sections()
+ * rather than directly.
+ *
+ * @global $wp_settings_fields Storage array of settings fields and their pages/sections
+ *
+ * @since 2.7.0
+ *
+ * @param string $page Slug title of the admin page who's settings fields you want to show.
+ * @param section $section Slug title of the settings section who's fields you want to show.
+ */
+function do_settings_fields($page, $section) {
+	global $wp_settings_fields;
+
+	if ( !isset($wp_settings_fields) || !isset($wp_settings_fields[$page]) || !isset($wp_settings_fields[$page][$section]) )
+		return;
+
+	foreach ( (array) $wp_settings_fields[$page][$section] as $field ) {
+		echo '<tr valign="top">';
+		if ( !empty($field['args']['label_for']) )
+			echo '<th scope="row"><label for="' . esc_attr( $field['args']['label_for'] ) . '">' . $field['title'] . '</label></th>';
+		else
+			echo '<th scope="row">' . $field['title'] . '</th>';
+		echo '<td>';
+		call_user_func($field['callback'], $field['args']);
+		echo '</td>';
+		echo '</tr>';
+	}
+}
+
+/**
+ * Register a settings error to be displayed to the user
+ *
+ * Part of the Settings API. Use this to show messages to users about settings validation
+ * problems, missing settings or anything else.
+ *
+ * Settings errors should be added inside the $sanitize_callback function defined in
+ * register_setting() for a given setting to give feedback about the submission.
+ *
+ * By default messages will show immediately after the submission that generated the error.
+ * Additional calls to settings_errors() can be used to show errors even when the settings
+ * page is first accessed.
+ *
+ * @since 3.0.0
+ *
+ * @global array $wp_settings_errors Storage array of errors registered during this pageload
+ *
+ * @param string $setting Slug title of the setting to which this error applies
+ * @param string $code Slug-name to identify the error. Used as part of 'id' attribute in HTML output.
+ * @param string $message The formatted message text to display to the user (will be shown inside styled <div> and <p>)
+ * @param string $type The type of message it is, controls HTML class. Use 'error' or 'updated'.
+ */
+function add_settings_error( $setting, $code, $message, $type = 'error' ) {
+	global $wp_settings_errors;
+
+	if ( !isset($wp_settings_errors) )
+		$wp_settings_errors = array();
+
+	$new_error = array(
+		'setting' => $setting,
+		'code' => $code,
+		'message' => $message,
+		'type' => $type
+	);
+	$wp_settings_errors[] = $new_error;
+}
+
+/**
+ * Fetch settings errors registered by add_settings_error()
+ *
+ * Checks the $wp_settings_errors array for any errors declared during the current
+ * pageload and returns them.
+ *
+ * If changes were just submitted ($_GET['settings-updated']) and settings errors were saved
+ * to the 'settings_errors' transient then those errors will be returned instead. This
+ * is used to pass errors back across pageloads.
+ *
+ * Use the $sanitize argument to manually re-sanitize the option before returning errors.
+ * This is useful if you have errors or notices you want to show even when the user
+ * hasn't submitted data (i.e. when they first load an options page, or in admin_notices action hook)
+ *
+ * @since 3.0.0
+ *
+ * @global array $wp_settings_errors Storage array of errors registered during this pageload
+ *
+ * @param string $setting Optional slug title of a specific setting who's errors you want.
+ * @param boolean $sanitize Whether to re-sanitize the setting value before returning errors.
+ * @return array Array of settings errors
+ */
+function get_settings_errors( $setting = '', $sanitize = false ) {
+	global $wp_settings_errors;
+
+	// If $sanitize is true, manually re-run the sanitizisation for this option
+	// This allows the $sanitize_callback from register_setting() to run, adding
+	// any settings errors you want to show by default.
+	if ( $sanitize )
+		sanitize_option( $setting, get_option( $setting ) );
+
+	// If settings were passed back from options.php then use them
+	if ( isset( $_GET['settings-updated'] ) && $_GET['settings-updated'] && get_transient( 'settings_errors' ) ) {
+		$wp_settings_errors = array_merge( (array) $wp_settings_errors, get_transient( 'settings_errors' ) );
+		delete_transient( 'settings_errors' );
+	}
+
+	// Check global in case errors have been added on this pageload
+	if ( ! count( $wp_settings_errors ) )
+		return array();
+
+	// Filter the results to those of a specific setting if one was set
+	if ( $setting ) {
+		$setting_errors = array();
+		foreach ( (array) $wp_settings_errors as $key => $details ) {
+			if ( $setting == $details['setting'] )
+				$setting_errors[] = $wp_settings_errors[$key];
+		}
+		return $setting_errors;
+	}
+
+	return $wp_settings_errors;
+}
+
+/**
+ * Display settings errors registered by add_settings_error()
+ *
+ * Part of the Settings API. Outputs a <div> for each error retrieved by get_settings_errors().
+ *
+ * This is called automatically after a settings page based on the Settings API is submitted.
+ * Errors should be added during the validation callback function for a setting defined in register_setting()
+ *
+ * The $sanitize option is passed into get_settings_errors() and will re-run the setting sanitization
+ * on its current value.
+ *
+ * The $hide_on_update option will cause errors to only show when the settings page is first loaded.
+ * if the user has already saved new values it will be hidden to avoid repeating messages already
+ * shown in the default error reporting after submission. This is useful to show general errors like missing
+ * settings when the user arrives at the settings page.
+ *
+ * @since 3.0.0
+ *
+ * @param string $setting Optional slug title of a specific setting who's errors you want.
+ * @param boolean $sanitize Whether to re-sanitize the setting value before returning errors.
+ * @param boolean $hide_on_update If set to true errors will not be shown if the settings page has already been submitted.
+ */
+function settings_errors( $setting = '', $sanitize = false, $hide_on_update = false ) {
+
+	if ( $hide_on_update && ! empty( $_GET['settings-updated'] ) )
+		return;
+
+	$settings_errors = get_settings_errors( $setting, $sanitize );
+
+	if ( empty( $settings_errors ) )
+		return;
+
+	$output = '';
+	foreach ( $settings_errors as $key => $details ) {
+		$css_id = 'setting-error-' . $details['code'];
+		$css_class = $details['type'] . ' settings-error';
+		$output .= "<div id='$css_id' class='$css_class'> \n";
+		$output .= "<p><strong>{$details['message']}</strong></p>";
+		$output .= "</div> \n";
+	}
+	echo $output;
+}
+
+/**
+ * {@internal Missing Short Description}}
+ *
+ * @since 2.7.0
+ *
+ * @param unknown_type $found_action
+ */
+function find_posts_div($found_action = '') {
 ?>
+	<div id="find-posts" class="find-box" style="display:none;">
+		<div id="find-posts-head" class="find-box-head"><?php _e('Find Posts or Pages'); ?></div>
+		<div class="find-box-inside">
+			<div class="find-box-search">
+				<?php if ( $found_action ) { ?>
+					<input type="hidden" name="found_action" value="<?php echo esc_attr($found_action); ?>" />
+				<?php } ?>
+
+				<input type="hidden" name="affected" id="affected" value="" />
+				<?php wp_nonce_field( 'find-posts', '_ajax_nonce', false ); ?>
+				<label class="screen-reader-text" for="find-posts-input"><?php _e( 'Search' ); ?></label>
+				<input type="text" id="find-posts-input" name="ps" value="" />
+				<span class="spinner"></span>
+				<input type="button" id="find-posts-search" value="<?php esc_attr_e( 'Search' ); ?>" class="button" />
+			</div>
+			<div id="find-posts-response"></div>
+		</div>
+		<div class="find-box-buttons">
+			<input id="find-posts-close" type="button" class="button alignleft" value="<?php esc_attr_e('Close'); ?>" />
+			<?php submit_button( __( 'Select' ), 'button-primary alignright', 'find-posts-submit', false ); ?>
+		</div>
+	</div>
+<?php
+}
+
+/**
+ * Display the post password.
+ *
+ * The password is passed through {@link esc_attr()} to ensure that it
+ * is safe for placing in an html attribute.
+ *
+ * @uses attr
+ * @since 2.7.0
+ */
+function the_post_password() {
+	$post = get_post();
+	if ( isset( $post->post_password ) )
+		echo esc_attr( $post->post_password );
+}
+
+/**
+ * Get the post title.
+ *
+ * The post title is fetched and if it is blank then a default string is
+ * returned.
+ *
+ * @since 2.7.0
+ * @param mixed $post Post id or object. If not supplied the global $post is used.
+ * @return string The post title if set
+ */
+function _draft_or_post_title( $post = 0 ) {
+	$title = get_the_title( $post );
+	if ( empty( $title ) )
+		$title = __( '(no title)' );
+	return $title;
+}
+
+/**
+ * Display the search query.
+ *
+ * A simple wrapper to display the "s" parameter in a GET URI. This function
+ * should only be used when {@link the_search_query()} cannot.
+ *
+ * @uses attr
+ * @since 2.7.0
+ *
+ */
+function _admin_search_query() {
+	echo isset($_REQUEST['s']) ? esc_attr( wp_unslash( $_REQUEST['s'] ) ) : '';
+}
+
+/**
+ * Generic Iframe header for use with Thickbox
+ *
+ * @since 2.7.0
+ * @param string $title Title of the Iframe page.
+ * @param bool $limit_styles Limit styles to colour-related styles only (unless others are enqueued).
+ *
+ */
+function iframe_header( $title = '', $limit_styles = false ) {
+	show_admin_bar( false );
+	global $hook_suffix, $current_user, $admin_body_class, $wp_locale;
+	$admin_body_class = preg_replace('/[^a-z0-9_-]+/i', '-', $hook_suffix);
+
+	$current_screen = get_current_screen();
+
+	@header( 'Content-Type: ' . get_option( 'html_type' ) . '; charset=' . get_option( 'blog_charset' ) );
+	_wp_admin_html_begin();
+?>
+<title><?php bloginfo('name') ?> &rsaquo; <?php echo $title ?> &#8212; <?php _e('WordPress'); ?></title>
+<?php
+wp_enqueue_style( 'colors' );
+?>
+<script type="text/javascript">
+//<![CDATA[
+addLoadEvent = function(func){if(typeof jQuery!="undefined")jQuery(document).ready(func);else if(typeof wpOnload!='function'){wpOnload=func;}else{var oldonload=wpOnload;wpOnload=function(){oldonload();func();}}};
+function tb_close(){var win=window.dialogArguments||opener||parent||top;win.tb_remove();}
+var userSettings = {
+		'url': '<?php echo SITECOOKIEPATH; ?>',
+		'uid': '<?php if ( ! isset($current_user) ) $current_user = wp_get_current_user(); echo $current_user->ID; ?>',
+		'time':'<?php echo time() ?>'
+	},
+	ajaxurl = '<?php echo admin_url( 'admin-ajax.php', 'relative' ); ?>',
+	pagenow = '<?php echo $current_screen->id; ?>',
+	typenow = '<?php echo $current_screen->post_type; ?>',
+	adminpage = '<?php echo $admin_body_class; ?>',
+	thousandsSeparator = '<?php echo addslashes( $wp_locale->number_format['thousands_sep'] ); ?>',
+	decimalPoint = '<?php echo addslashes( $wp_locale->number_format['decimal_point'] ); ?>',
+	isRtl = <?php echo (int) is_rtl(); ?>;
+//]]>
+</script>
+<?php
+do_action('admin_enqueue_scripts', $hook_suffix);
+do_action("admin_print_styles-$hook_suffix");
+do_action('admin_print_styles');
+do_action("admin_print_scripts-$hook_suffix");
+do_action('admin_print_scripts');
+do_action("admin_head-$hook_suffix");
+do_action('admin_head');
+
+$admin_body_class .= ' locale-' . sanitize_html_class( strtolower( str_replace( '_', '-', get_locale() ) ) );
+?>
+</head>
+<body<?php if ( isset($GLOBALS['body_id']) ) echo ' id="' . $GLOBALS['body_id'] . '"'; ?> class="wp-admin wp-core-ui no-js iframe <?php echo apply_filters( 'admin_body_class', '' ) . ' ' . $admin_body_class; ?>">
+<script type="text/javascript">
+//<![CDATA[
+(function(){
+var c = document.body.className;
+c = c.replace(/no-js/, 'js');
+document.body.className = c;
+})();
+//]]>
+</script>
+<?php
+}
+
+/**
+ * Generic Iframe footer for use with Thickbox
+ *
+ * @since 2.7.0
+ *
+ */
+function iframe_footer() {
+	//We're going to hide any footer output on iframe pages, but run the hooks anyway since they output Javascript or other needed content. ?>
+	<div class="hidden">
+<?php
+	do_action('admin_footer', '');
+	do_action('admin_print_footer_scripts'); ?>
+	</div>
+<script type="text/javascript">if(typeof wpOnload=="function")wpOnload();</script>
+</body>
+</html>
+<?php
+}
+
+function _post_states($post) {
+	$post_states = array();
+	if ( isset( $_REQUEST['post_status'] ) )
+		$post_status = $_REQUEST['post_status'];
+	else
+		$post_status = '';
+
+	if ( !empty($post->post_password) )
+		$post_states['protected'] = __('Password protected');
+	if ( 'private' == $post->post_status && 'private' != $post_status )
+		$post_states['private'] = __('Private');
+	if ( 'draft' == $post->post_status && 'draft' != $post_status )
+		$post_states['draft'] = __('Draft');
+	if ( 'pending' == $post->post_status && 'pending' != $post_status )
+		/* translators: post state */
+		$post_states['pending'] = _x('Pending', 'post state');
+	if ( is_sticky($post->ID) )
+		$post_states['sticky'] = __('Sticky');
+
+	$post_states = apply_filters( 'display_post_states', $post_states, $post );
+
+	if ( ! empty($post_states) ) {
+		$state_count = count($post_states);
+		$i = 0;
+		echo ' - ';
+		foreach ( $post_states as $state ) {
+			++$i;
+			( $i == $state_count ) ? $sep = '' : $sep = ', ';
+			echo "<span class='post-state'>$state$sep</span>";
+		}
+	}
+
+}
+
+function _media_states( $post ) {
+	$media_states = array();
+	$stylesheet = get_option('stylesheet');
+
+	if ( current_theme_supports( 'custom-header') ) {
+		$meta_header = get_post_meta($post->ID, '_wp_attachment_is_custom_header', true );
+		if ( ! empty( $meta_header ) && $meta_header == $stylesheet )
+			$media_states[] = __( 'Header Image' );
+	}
+
+	if ( current_theme_supports( 'custom-background') ) {
+		$meta_background = get_post_meta($post->ID, '_wp_attachment_is_custom_background', true );
+		if ( ! empty( $meta_background ) && $meta_background == $stylesheet )
+			$media_states[] = __( 'Background Image' );
+	}
+
+	$media_states = apply_filters( 'display_media_states', $media_states );
+
+	if ( ! empty( $media_states ) ) {
+		$state_count = count( $media_states );
+		$i = 0;
+		echo ' - ';
+		foreach ( $media_states as $state ) {
+			++$i;
+			( $i == $state_count ) ? $sep = '' : $sep = ', ';
+			echo "<span class='post-state'>$state$sep</span>";
+		}
+	}
+}
+
+/**
+ * Test support for compressing JavaScript from PHP
+ *
+ * Outputs JavaScript that tests if compression from PHP works as expected
+ * and sets an option with the result. Has no effect when the current user
+ * is not an administrator. To run the test again the option 'can_compress_scripts'
+ * has to be deleted.
+ *
+ * @since 2.8.0
+ */
+function compression_test() {
+?>
+	<script type="text/javascript">
+	/* <![CDATA[ */
+	var testCompression = {
+		get : function(test) {
+			var x;
+			if ( window.XMLHttpRequest ) {
+				x = new XMLHttpRequest();
+			} else {
+				try{x=new ActiveXObject('Msxml2.XMLHTTP');}catch(e){try{x=new ActiveXObject('Microsoft.XMLHTTP');}catch(e){};}
+			}
+
+			if (x) {
+				x.onreadystatechange = function() {
+					var r, h;
+					if ( x.readyState == 4 ) {
+						r = x.responseText.substr(0, 18);
+						h = x.getResponseHeader('Content-Encoding');
+						testCompression.check(r, h, test);
+					}
+				}
+
+				x.open('GET', ajaxurl + '?action=wp-compression-test&test='+test+'&'+(new Date()).getTime(), true);
+				x.send('');
+			}
+		},
+
+		check : function(r, h, test) {
+			if ( ! r && ! test )
+				this.get(1);
+
+			if ( 1 == test ) {
+				if ( h && ( h.match(/deflate/i) || h.match(/gzip/i) ) )
+					this.get('no');
+				else
+					this.get(2);
+
+				return;
+			}
+
+			if ( 2 == test ) {
+				if ( '"wpCompressionTest' == r )
+					this.get('yes');
+				else
+					this.get('no');
+			}
+		}
+	};
+	testCompression.check();
+	/* ]]> */
+	</script>
+<?php
+}
+
+/**
+ * Echos a submit button, with provided text and appropriate class
+ *
+ * @since 3.1.0
+ *
+ * @param string $text The text of the button (defaults to 'Save Changes')
+ * @param string $type The type of button. One of: primary, secondary, delete
+ * @param string $name The HTML name of the submit button. Defaults to "submit". If no id attribute
+ *               is given in $other_attributes below, $name will be used as the button's id.
+ * @param bool $wrap True if the output button should be wrapped in a paragraph tag,
+ * 			   false otherwise. Defaults to true
+ * @param array|string $other_attributes Other attributes that should be output with the button,
+ *                     mapping attributes to their values, such as array( 'tabindex' => '1' ).
+ *                     These attributes will be output as attribute="value", such as tabindex="1".
+ *                     Defaults to no other attributes. Other attributes can also be provided as a
+ *                     string such as 'tabindex="1"', though the array format is typically cleaner.
+ */
+function submit_button( $text = null, $type = 'primary', $name = 'submit', $wrap = true, $other_attributes = null ) {
+	echo get_submit_button( $text, $type, $name, $wrap, $other_attributes );
+}
+
+/**
+ * Returns a submit button, with provided text and appropriate class
+ *
+ * @since 3.1.0
+ *
+ * @param string $text The text of the button (defaults to 'Save Changes')
+ * @param string $type The type of button. One of: primary, secondary, delete
+ * @param string $name The HTML name of the submit button. Defaults to "submit". If no id attribute
+ *               is given in $other_attributes below, $name will be used as the button's id.
+ * @param bool $wrap True if the output button should be wrapped in a paragraph tag,
+ * 			   false otherwise. Defaults to true
+ * @param array|string $other_attributes Other attributes that should be output with the button,
+ *                     mapping attributes to their values, such as array( 'tabindex' => '1' ).
+ *                     These attributes will be output as attribute="value", such as tabindex="1".
+ *                     Defaults to no other attributes. Other attributes can also be provided as a
+ *                     string such as 'tabindex="1"', though the array format is typically cleaner.
+ */
+function get_submit_button( $text = null, $type = 'primary large', $name = 'submit', $wrap = true, $other_attributes = null ) {
+	if ( ! is_array( $type ) )
+		$type = explode( ' ', $type );
+
+	$button_shorthand = array( 'primary', 'small', 'large' );
+	$classes = array( 'button' );
+	foreach ( $type as $t ) {
+		if ( 'secondary' === $t || 'button-secondary' === $t )
+			continue;
+		$classes[] = in_array( $t, $button_shorthand ) ? 'button-' . $t : $t;
+	}
+	$class = implode( ' ', array_unique( $classes ) );
+
+	if ( 'delete' === $type )
+		$class = 'button-secondary delete';
+
+	$text = $text ? $text : __( 'Save Changes' );
+
+	// Default the id attribute to $name unless an id was specifically provided in $other_attributes
+	$id = $name;
+	if ( is_array( $other_attributes ) && isset( $other_attributes['id'] ) ) {
+		$id = $other_attributes['id'];
+		unset( $other_attributes['id'] );
+	}
+
+	$attributes = '';
+	if ( is_array( $other_attributes ) ) {
+		foreach ( $other_attributes as $attribute => $value ) {
+			$attributes .= $attribute . '="' . esc_attr( $value ) . '" '; // Trailing space is important
+		}
+	} else if ( !empty( $other_attributes ) ) { // Attributes provided as a string
+		$attributes = $other_attributes;
+	}
+
+	$button = '<input type="submit" name="' . esc_attr( $name ) . '" id="' . esc_attr( $id ) . '" class="' . esc_attr( $class );
+	$button	.= '" value="' . esc_attr( $text ) . '" ' . $attributes . ' />';
+
+	if ( $wrap ) {
+		$button = '<p class="submit">' . $button . '</p>';
+	}
+
+	return $button;
+}
+
+function _wp_admin_html_begin() {
+	$admin_html_class = ( is_admin_bar_showing() ) ? 'wp-toolbar' : '';
+?>
+<!DOCTYPE html>
+<!--[if IE 8]>
+<html xmlns="http://www.w3.org/1999/xhtml" class="ie8 <?php echo $admin_html_class; ?>" <?php do_action('admin_xml_ns'); ?> <?php language_attributes(); ?>>
+<![endif]-->
+<!--[if !(IE 8) ]><!-->
+<html xmlns="http://www.w3.org/1999/xhtml" class="<?php echo $admin_html_class; ?>" <?php do_action('admin_xml_ns'); ?> <?php language_attributes(); ?>>
+<!--<![endif]-->
+<head>
+<meta http-equiv="Content-Type" content="<?php bloginfo('html_type'); ?>; charset=<?php echo get_option('blog_charset'); ?>" />
+<?php
+}
+
+final class WP_Internal_Pointers {
+	/**
+	 * Initializes the new feature pointers.
+	 *
+	 * @since 3.3.0
+	 *
+	 * All pointers can be disabled using the following:
+	 *     remove_action( 'admin_enqueue_scripts', array( 'WP_Internal_Pointers', 'enqueue_scripts' ) );
+	 *
+	 * Individual pointers (e.g. wp330_toolbar) can be disabled using the following:
+	 *     remove_action( 'admin_print_footer_scripts', array( 'WP_Internal_Pointers', 'pointer_wp330_toolbar' ) );
+	 */
+	public static function enqueue_scripts( $hook_suffix ) {
+		/*
+		 * Register feature pointers
+		 * Format: array( hook_suffix => pointer_id )
+		 */
+
+		$registered_pointers = array(
+			'index.php'    => 'wp330_toolbar',
+			'post-new.php' => 'wp350_media',
+			'post.php'     => 'wp350_media',
+			'themes.php'   => array( 'wp330_saving_widgets', 'wp340_customize_current_theme_link' ),
+			'appearance_page_custom-header' => 'wp340_choose_image_from_library',
+			'appearance_page_custom-background' => 'wp340_choose_image_from_library',
+		);
+
+		// Check if screen related pointer is registered
+		if ( empty( $registered_pointers[ $hook_suffix ] ) )
+			return;
+
+		$pointers = (array) $registered_pointers[ $hook_suffix ];
+
+		$caps_required = array(
+			'wp330_saving_widgets' => array( 'edit_theme_options', 'switch_themes' ),
+			'wp340_customize_current_theme_link' => array( 'edit_theme_options' ),
+			'wp340_choose_image_from_library' => array( 'edit_theme_options' ),
+			'wp350_media' => array( 'upload_files' ),
+		);
+
+		// Get dismissed pointers
+		$dismissed = explode( ',', (string) get_user_meta( get_current_user_id(), 'dismissed_wp_pointers', true ) );
+
+		$got_pointers = false;
+		foreach ( array_diff( $pointers, $dismissed ) as $pointer ) {
+			if ( isset( $caps_required[ $pointer ] ) ) {
+				foreach ( $caps_required[ $pointer ] as $cap ) {
+					if ( ! current_user_can( $cap ) )
+						continue 2;
+				}
+			}
+
+			// Bind pointer print function
+			add_action( 'admin_print_footer_scripts', array( 'WP_Internal_Pointers', 'pointer_' . $pointer ) );
+			$got_pointers = true;
+		}
+
+		if ( ! $got_pointers )
+			return;
+
+		// Add pointers script and style to queue
+		wp_enqueue_style( 'wp-pointer' );
+		wp_enqueue_script( 'wp-pointer' );
+	}
+
+	/**
+	 * Print the pointer javascript data.
+	 *
+	 * @since 3.3.0
+	 *
+	 * @param string $pointer_id The pointer ID.
+	 * @param string $selector The HTML elements, on which the pointer should be attached.
+	 * @param array  $args Arguments to be passed to the pointer JS (see wp-pointer.js).
+	 */
+	private static function print_js( $pointer_id, $selector, $args ) {
+		if ( empty( $pointer_id ) || empty( $selector ) || empty( $args ) || empty( $args['content'] ) )
+			return;
+
+		?>
+		<script type="text/javascript">
+		//<![CDATA[
+		(function($){
+			var options = <?php echo json_encode( $args ); ?>, setup;
+
+			if ( ! options )
+				return;
+
+			options = $.extend( options, {
+				close: function() {
+					$.post( ajaxurl, {
+						pointer: '<?php echo $pointer_id; ?>',
+						action: 'dismiss-wp-pointer'
+					});
+				}
+			});
+
+			setup = function() {
+				$('<?php echo $selector; ?>').pointer( options ).pointer('open');
+			};
+
+			if ( options.position && options.position.defer_loading )
+				$(window).bind( 'load.wp-pointers', setup );
+			else
+				$(document).ready( setup );
+
+		})( jQuery );
+		//]]>
+		</script>
+		<?php
+	}
+
+	public static function pointer_wp330_toolbar() {
+		$content  = '<h3>' . __( 'New Feature: Toolbar' ) . '</h3>';
+		$content .= '<p>' .  __( 'We&#8217;ve combined the admin bar and the old Dashboard header into one persistent toolbar. Hover over the toolbar items to see what&#8217;s new.' ) . '</p>';
+
+		if ( is_multisite() && is_super_admin() )
+			$content .= '<p>' . __( 'Network Admin is now located in the My Sites menu.' ) . '</p>';
+
+		WP_Internal_Pointers::print_js( 'wp330_toolbar', '#wpadminbar', array(
+			'content'  => $content,
+			'position' => array( 'edge' => 'top', 'align' => 'center' ),
+		) );
+	}
+
+	/**
+	 * Print 'Updated Media Uploader' for 3.3.0.
+	 *
+	 * @since 3.3.0
+	 */
+	public static function pointer_wp330_media_uploader() {}
+
+	/**
+	 * Print 'New Feature: Saving Widgets' for 3.3.0.
+	 *
+	 * @since 3.3.0
+	 */
+	public static function pointer_wp330_saving_widgets() {
+		$content  = '<h3>' . __( 'New Feature: Saving Widgets' ) . '</h3>';
+		$content .= '<p>' . __( 'If you change your mind and revert to your previous theme, we&#8217;ll put the widgets back the way you had them.' ) . '</p>';
+
+		WP_Internal_Pointers::print_js( 'wp330_saving_widgets', '#message2', array(
+			'content'  => $content,
+			'position' => array( 'edge' => 'top', 'align' => is_rtl() ? 'right' : 'left' ),
+		) );
+	}
+
+	/**
+	 * Print 'New Feature: Current Theme Customize Link' for 3.4.0.
+	 *
+	 * @since 3.4.0
+	 */
+	public static function pointer_wp340_customize_current_theme_link() {
+		$content  = '<h3>' . __( 'New Feature: Customizer' ) . '</h3>';
+		$content .= '<p>' . __( 'Click Customize to change the header, background, title and menus of the current theme, all in one place.' ) . '</p>';
+		$content .= '<p>' . __( 'Click the Live Preview links in the Available Themes list below to customize and preview another theme before activating it.' ) . '</p>';
+
+		WP_Internal_Pointers::print_js( 'wp340_customize_current_theme_link', '#customize-current-theme-link', array(
+			'content'  => $content,
+			'position' => array( 'edge' => 'top', 'align' => is_rtl() ? 'right' : 'left', 'offset' => is_rtl() ? '32 0' : '-32 0' ),
+		) );
+	}
+
+	/**
+	 * Print 'New Feature: Choose Image from Library' for 3.4.0.
+	 *
+	 * @since 3.4.0
+	 */
+	public static function pointer_wp340_choose_image_from_library() {
+		$content  = '<h3>' . __( 'New Feature: Choose Image from Library' ) . '</h3>';
+		$content .= '<p>' . __( 'Want to use an image you uploaded earlier? Select it from your media library instead of uploading it again.' ) . '</p>';
+
+		WP_Internal_Pointers::print_js( 'wp340_choose_image_from_library', '#choose-from-library-link', array(
+			'content'  => $content,
+			'position' => array( 'edge' => 'top', 'align' => is_rtl() ? 'right' : 'left', 'defer_loading' => true ),
+		) );
+	}
+
+	public static function pointer_wp350_media() {
+		$content  = '<h3>' . __( 'New Media Manager' ) . '</h3>';
+		$content .= '<p>' . __( 'Uploading files and creating image galleries has a whole new look. Check it out!' ) . '</p>';
+
+		self::print_js( 'wp350_media', '.insert-media', array(
+			'content'  => $content,
+			'position' => array( 'edge' => is_rtl() ? 'right' : 'left', 'align' => 'center' ),
+		) );
+	}
+
+	/**
+	 * Prevents new users from seeing existing 'new feature' pointers.
+	 *
+	 * @since 3.3.0
+	 */
+	public static function dismiss_pointers_for_new_users( $user_id ) {
+		add_user_meta( $user_id, 'dismissed_wp_pointers', 'wp330_toolbar,wp330_saving_widgets,wp340_choose_image_from_library,wp340_customize_current_theme_link,wp350_media' );
+	}
+}
+
+add_action( 'admin_enqueue_scripts', array( 'WP_Internal_Pointers', 'enqueue_scripts'                ) );
+add_action( 'user_register',         array( 'WP_Internal_Pointers', 'dismiss_pointers_for_new_users' ) );
+
+/**
+ * Convert a screen string to a screen object
+ *
+ * @since 3.0.0
+ *
+ * @param string $hook_name The hook name (also known as the hook suffix) used to determine the screen.
+ * @return WP_Screen Screen object.
+ */
+function convert_to_screen( $hook_name ) {
+	if ( ! class_exists( 'WP_Screen' ) ) {
+		_doing_it_wrong( 'convert_to_screen(), add_meta_box()', __( "Likely direct inclusion of wp-admin/includes/template.php in order to use add_meta_box(). This is very wrong. Hook the add_meta_box() call into the add_meta_boxes action instead." ), '3.3' );
+		return (object) array( 'id' => '_invalid', 'base' => '_are_belong_to_us' );
+	}
+
+	return WP_Screen::get( $hook_name );
+}

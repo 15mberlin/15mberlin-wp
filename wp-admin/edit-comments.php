@@ -1,245 +1,255 @@
 <?php
-require_once('admin.php');
+/**
+ * Edit Comments Administration Screen.
+ *
+ * @package WordPress
+ * @subpackage Administration
+ */
 
-$title = __('Edit Comments');
-$parent_file = 'edit-comments.php';
-wp_enqueue_script( 'admin-comments' );
-wp_enqueue_script('admin-forms');
+/** WordPress Administration Bootstrap */
+require_once('./admin.php');
+if ( !current_user_can('edit_posts') )
+	wp_die(__('Cheatin&#8217; uh?'));
 
-if ( !empty( $_REQUEST['delete_comments'] ) ) {
-	check_admin_referer('bulk-comments');
+$wp_list_table = _get_list_table('WP_Comments_List_Table');
+$pagenum = $wp_list_table->get_pagenum();
 
-	$comments_deleted = $comments_approved = $comments_unapproved = $comments_spammed = 0;
-	foreach ($_REQUEST['delete_comments'] as $comment) : // Check the permissions on each
-		$comment = (int) $comment;
-		$post_id = (int) $wpdb->get_var("SELECT comment_post_ID FROM $wpdb->comments WHERE comment_ID = $comment");
-		// $authordata = get_userdata( $wpdb->get_var("SELECT post_author FROM $wpdb->posts WHERE ID = $post_id") );
-		if ( !current_user_can('edit_post', $post_id) )
+$doaction = $wp_list_table->current_action();
+
+if ( $doaction ) {
+	check_admin_referer( 'bulk-comments' );
+
+	if ( 'delete_all' == $doaction && !empty( $_REQUEST['pagegen_timestamp'] ) ) {
+		$comment_status = wp_unslash( $_REQUEST['comment_status'] );
+		$delete_time = wp_unslash( $_REQUEST['pagegen_timestamp'] );
+		$comment_ids = $wpdb->get_col( $wpdb->prepare( "SELECT comment_ID FROM $wpdb->comments WHERE comment_approved = %s AND %s > comment_date_gmt", $comment_status, $delete_time ) );
+		$doaction = 'delete';
+	} elseif ( isset( $_REQUEST['delete_comments'] ) ) {
+		$comment_ids = $_REQUEST['delete_comments'];
+		$doaction = ( $_REQUEST['action'] != -1 ) ? $_REQUEST['action'] : $_REQUEST['action2'];
+	} elseif ( isset( $_REQUEST['ids'] ) ) {
+		$comment_ids = array_map( 'absint', explode( ',', $_REQUEST['ids'] ) );
+	} elseif ( wp_get_referer() ) {
+		wp_safe_redirect( wp_get_referer() );
+		exit;
+	}
+
+	$approved = $unapproved = $spammed = $unspammed = $trashed = $untrashed = $deleted = 0;
+
+	$redirect_to = remove_query_arg( array( 'trashed', 'untrashed', 'deleted', 'spammed', 'unspammed', 'approved', 'unapproved', 'ids' ), wp_get_referer() );
+	$redirect_to = add_query_arg( 'paged', $pagenum, $redirect_to );
+
+	foreach ( $comment_ids as $comment_id ) { // Check the permissions on each
+		if ( !current_user_can( 'edit_comment', $comment_id ) )
 			continue;
-		if ( !empty( $_REQUEST['spamit'] ) ) {
-			wp_set_comment_status($comment, 'spam');
-			$comments_spammed++;
-		} elseif ( !empty( $_REQUEST['deleteit'] ) ) {
-			wp_set_comment_status($comment, 'delete');
-			$comments_deleted++;
-		} elseif ( !empty( $_REQUEST['approveit'] ) ) {
-			wp_set_comment_status($comment, 'approve');
-			$comments_approved++;
-		} elseif ( !empty( $_REQUEST['unapproveit'] ) ) {
-			wp_set_comment_status($comment, 'hold');
-			$comments_unapproved++;
+
+		switch ( $doaction ) {
+			case 'approve' :
+				wp_set_comment_status( $comment_id, 'approve' );
+				$approved++;
+				break;
+			case 'unapprove' :
+				wp_set_comment_status( $comment_id, 'hold' );
+				$unapproved++;
+				break;
+			case 'spam' :
+				wp_spam_comment( $comment_id );
+				$spammed++;
+				break;
+			case 'unspam' :
+				wp_unspam_comment( $comment_id );
+				$unspammed++;
+				break;
+			case 'trash' :
+				wp_trash_comment( $comment_id );
+				$trashed++;
+				break;
+			case 'untrash' :
+				wp_untrash_comment( $comment_id );
+				$untrashed++;
+				break;
+			case 'delete' :
+				wp_delete_comment( $comment_id );
+				$deleted++;
+				break;
 		}
-	endforeach;
-	$redirect_to = basename( __FILE__ ) . '?deleted=' . $comments_deleted . '&approved=' . $comments_approved . '&spam=' . $comments_spammed . '&unapproved=' . $comments_unapproved;
-	if ( !empty($_REQUEST['mode']) )
-		$redirect_to = add_query_arg('mode', $_REQUEST['mode'], $redirect_to);
-	if ( !empty($_REQUEST['comment_status']) )
-		$redirect_to = add_query_arg('comment_status', $_REQUEST['comment_status'], $redirect_to);
-	if ( !empty($_REQUEST['s']) )
-		$redirect_to = add_query_arg('s', $_REQUEST['s'], $redirect_to);
-	wp_redirect( $redirect_to );
-} elseif ( !empty($_GET['_wp_http_referer']) ) {
-	 wp_redirect(remove_query_arg(array('_wp_http_referer', '_wpnonce'), stripslashes($_SERVER['REQUEST_URI'])));
+	}
+
+	if ( $approved )
+		$redirect_to = add_query_arg( 'approved', $approved, $redirect_to );
+	if ( $unapproved )
+		$redirect_to = add_query_arg( 'unapproved', $unapproved, $redirect_to );
+	if ( $spammed )
+		$redirect_to = add_query_arg( 'spammed', $spammed, $redirect_to );
+	if ( $unspammed )
+		$redirect_to = add_query_arg( 'unspammed', $unspammed, $redirect_to );
+	if ( $trashed )
+		$redirect_to = add_query_arg( 'trashed', $trashed, $redirect_to );
+	if ( $untrashed )
+		$redirect_to = add_query_arg( 'untrashed', $untrashed, $redirect_to );
+	if ( $deleted )
+		$redirect_to = add_query_arg( 'deleted', $deleted, $redirect_to );
+	if ( $trashed || $spammed )
+		$redirect_to = add_query_arg( 'ids', join( ',', $comment_ids ), $redirect_to );
+
+	wp_safe_redirect( $redirect_to );
+	exit;
+} elseif ( ! empty( $_GET['_wp_http_referer'] ) ) {
+	 wp_redirect( remove_query_arg( array( '_wp_http_referer', '_wpnonce' ), wp_unslash( $_SERVER['REQUEST_URI'] ) ) );
 	 exit;
 }
 
-require_once('admin-header.php');
+$wp_list_table->prepare_items();
 
-if ( empty($_GET['mode']) )
-	$mode = 'detail';
-else
-	$mode = attribute_escape($_GET['mode']);
+wp_enqueue_script('admin-comments');
+enqueue_comment_hotkeys_js();
 
-if ( isset($_GET['comment_status']) )
-	$comment_status = attribute_escape($_GET['comment_status']);
+if ( $post_id )
+	$title = sprintf(__('Comments on &#8220;%s&#8221;'), wp_html_excerpt(_draft_or_post_title($post_id), 50));
 else
-	$comment_status = '';
+	$title = __('Comments');
 
-if ( isset($_GET['s']) )
-	$search_dirty = $_GET['s'];
-else
-	$search_dirty = '';
-$search = attribute_escape( $search_dirty );
+add_screen_option( 'per_page', array('label' => _x( 'Comments', 'comments per page (screen options)' )) );
+
+get_current_screen()->add_help_tab( array(
+'id'		=> 'overview',
+'title'		=> __('Overview'),
+'content'	=>
+	'<p>' . __( 'You can manage comments made on your site similar to the way you manage posts and other content. This screen is customizable in the same ways as other management screens, and you can act on comments using the on-hover action links or the Bulk Actions.' ) . '</p>'
+) );
+get_current_screen()->add_help_tab( array(
+'id'		=> 'moderating-comments',
+'title'		=> __('Moderating Comments'),
+'content'	=>
+		'<p>' . __( 'A yellow row means the comment is waiting for you to moderate it.' ) . '</p>' .
+		'<p>' . __( 'In the <strong>Author</strong> column, in addition to the author&#8217;s name, email address, and blog URL, the commenter&#8217;s IP address is shown. Clicking on this link will show you all the comments made from this IP address.' ) . '</p>' .
+		'<p>' . __( 'In the <strong>Comment</strong> column, above each comment it says &#8220;Submitted on,&#8221; followed by the date and time the comment was left on your site. Clicking on the date/time link will take you to that comment on your live site. Hovering over any comment gives you options to approve, reply (and approve), quick edit, edit, spam mark, or trash that comment.' ) . '</p>' .
+		'<p>' . __( 'In the <strong>In Response To</strong> column, there are three elements. The text is the name of the post that inspired the comment, and links to the post editor for that entry. The View Post link leads to that post on your live site. The small bubble with the number in it shows the number of approved comments that post has received. If the bubble is gray, you have moderated all comments for that post. If it is blue, there are pending comments. Clicking the bubble will filter the comments screen to show only comments on that post.' ) . '</p>' .
+		'<p>' . __( 'Many people take advantage of keyboard shortcuts to moderate their comments more quickly. Use the link to the side to learn more.' ) . '</p>'
+) );
+
+get_current_screen()->set_help_sidebar(
+	'<p><strong>' . __( 'For more information:' ) . '</strong></p>' .
+	'<p>' . __( '<a href="http://codex.wordpress.org/Administration_Screens#Comments" target="_blank">Documentation on Comments</a>' ) . '</p>' .
+	'<p>' . __( '<a href="http://codex.wordpress.org/Comment_Spam" target="_blank">Documentation on Comment Spam</a>' ) . '</p>' .
+	'<p>' . __( '<a href="http://codex.wordpress.org/Keyboard_Shortcuts" target="_blank">Documentation on Keyboard Shortcuts</a>' ) . '</p>' .
+	'<p>' . __( '<a href="http://wordpress.org/support/" target="_blank">Support Forums</a>' ) . '</p>'
+);
+
+require_once('./admin-header.php');
 ?>
+
+<div class="wrap">
+<?php screen_icon(); ?>
+<h2><?php
+if ( $post_id )
+	echo sprintf(__('Comments on &#8220;%s&#8221;'),
+		sprintf('<a href="%s">%s</a>',
+			get_edit_post_link($post_id),
+			wp_html_excerpt(_draft_or_post_title($post_id), 50)
+		)
+	);
+else
+	echo __('Comments');
+
+if ( isset($_REQUEST['s']) && $_REQUEST['s'] )
+	printf( '<span class="subtitle">' . sprintf( __( 'Search results for &#8220;%s&#8221;' ), wp_html_excerpt( esc_html( wp_unslash( $_REQUEST['s'] ) ), 50 ) ) . '</span>' ); ?>
+</h2>
+
 <?php
-if ( isset( $_GET['approved'] ) || isset( $_GET['deleted'] ) || isset( $_GET['spam'] ) ) {
-	$approved = isset( $_GET['approved'] ) ? (int) $_GET['approved'] : 0;
-	$deleted = isset( $_GET['deleted'] ) ? (int) $_GET['deleted'] : 0;
-	$spam = isset( $_GET['spam'] ) ? (int) $_GET['spam'] : 0;
+if ( isset( $_REQUEST['error'] ) ) {
+	$error = (int) $_REQUEST['error'];
+	$error_msg = '';
+	switch ( $error ) {
+		case 1 :
+			$error_msg = __( 'Oops, no comment with this ID.' );
+			break;
+		case 2 :
+			$error_msg = __( 'You are not allowed to edit comments on this post.' );
+			break;
+	}
+	if ( $error_msg )
+		echo '<div id="moderated" class="error"><p>' . $error_msg . '</p></div>';
+}
 
-	if ( $approved > 0 || $deleted > 0 || $spam > 0 ) {
-		echo '<div id="moderated" class="updated fade"><p>';
+if ( isset($_REQUEST['approved']) || isset($_REQUEST['deleted']) || isset($_REQUEST['trashed']) || isset($_REQUEST['untrashed']) || isset($_REQUEST['spammed']) || isset($_REQUEST['unspammed']) || isset($_REQUEST['same']) ) {
+	$approved  = isset( $_REQUEST['approved']  ) ? (int) $_REQUEST['approved']  : 0;
+	$deleted   = isset( $_REQUEST['deleted']   ) ? (int) $_REQUEST['deleted']   : 0;
+	$trashed   = isset( $_REQUEST['trashed']   ) ? (int) $_REQUEST['trashed']   : 0;
+	$untrashed = isset( $_REQUEST['untrashed'] ) ? (int) $_REQUEST['untrashed'] : 0;
+	$spammed   = isset( $_REQUEST['spammed']   ) ? (int) $_REQUEST['spammed']   : 0;
+	$unspammed = isset( $_REQUEST['unspammed'] ) ? (int) $_REQUEST['unspammed'] : 0;
+	$same      = isset( $_REQUEST['same'] )      ? (int) $_REQUEST['same']      : 0;
 
-		if ( $approved > 0 ) {
-			printf( __ngettext( '%s comment approved', '%s comments approved', $approved ), $approved );
-			echo '<br />';
+	if ( $approved > 0 || $deleted > 0 || $trashed > 0 || $untrashed > 0 || $spammed > 0 || $unspammed > 0 || $same > 0 ) {
+		if ( $approved > 0 )
+			$messages[] = sprintf( _n( '%s comment approved', '%s comments approved', $approved ), $approved );
+
+		if ( $spammed > 0 ) {
+			$ids = isset($_REQUEST['ids']) ? $_REQUEST['ids'] : 0;
+			$messages[] = sprintf( _n( '%s comment marked as spam.', '%s comments marked as spam.', $spammed ), $spammed ) . ' <a href="' . esc_url( wp_nonce_url( "edit-comments.php?doaction=undo&action=unspam&ids=$ids", "bulk-comments" ) ) . '">' . __('Undo') . '</a><br />';
 		}
 
-		if ( $deleted > 0 ) {
-			printf( __ngettext( '%s comment deleted', '%s comments deleted', $deleted ), $deleted );
-			echo '<br />';
+		if ( $unspammed > 0 )
+			$messages[] = sprintf( _n( '%s comment restored from the spam', '%s comments restored from the spam', $unspammed ), $unspammed );
+
+		if ( $trashed > 0 ) {
+			$ids = isset($_REQUEST['ids']) ? $_REQUEST['ids'] : 0;
+			$messages[] = sprintf( _n( '%s comment moved to the Trash.', '%s comments moved to the Trash.', $trashed ), $trashed ) . ' <a href="' . esc_url( wp_nonce_url( "edit-comments.php?doaction=undo&action=untrash&ids=$ids", "bulk-comments" ) ) . '">' . __('Undo') . '</a><br />';
 		}
 
-		if ( $spam > 0 ) {
-			printf( __ngettext( '%s comment marked as spam', '%s comments marked as spam', $spam ), $spam );
-			echo '<br />';
+		if ( $untrashed > 0 )
+			$messages[] = sprintf( _n( '%s comment restored from the Trash', '%s comments restored from the Trash', $untrashed ), $untrashed );
+
+		if ( $deleted > 0 )
+			$messages[] = sprintf( _n( '%s comment permanently deleted', '%s comments permanently deleted', $deleted ), $deleted );
+
+		if ( $same > 0 && $comment = get_comment( $same ) ) {
+			switch ( $comment->comment_approved ) {
+				case '1' :
+					$messages[] = __('This comment is already approved.') . ' <a href="' . esc_url( admin_url( "comment.php?action=editcomment&c=$same" ) ) . '">' . __( 'Edit comment' ) . '</a>';
+					break;
+				case 'trash' :
+					$messages[] = __( 'This comment is already in the Trash.' ) . ' <a href="' . esc_url( admin_url( 'edit-comments.php?comment_status=trash' ) ) . '"> ' . __( 'View Trash' ) . '</a>';
+					break;
+				case 'spam' :
+					$messages[] = __( 'This comment is already marked as spam.' ) . ' <a href="' . esc_url( admin_url( "comment.php?action=editcomment&c=$same" ) ) . '">' . __( 'Edit comment' ) . '</a>';
+					break;
+			}
 		}
 
-		echo '</p></div>';
+		echo '<div id="moderated" class="updated"><p>' . implode( "<br/>\n", $messages ) . '</p></div>';
 	}
 }
 ?>
-<div class="wrap">
-<form id="posts-filter" action="" method="get">
-<h2><?php _e('Manage Comments'); ?></h2>
 
-<ul class="subsubsub">
-<?php
-$status_links = array();
-$num_comments = wp_count_comments();
-$stati = array('moderated' => sprintf(__ngettext('Awaiting Moderation (%s)', 'Awaiting Moderation (%s)', $num_comments->moderated), "<span class='comment-count'>$num_comments->moderated</span>"), 'approved' => _c('Approved|plural'));
-$class = ( '' === $comment_status ) ? ' class="current"' : '';
-$status_links[] = "<li><a href=\"edit-comments.php\"$class>".__('Show All Comments')."</a>";
-foreach ( $stati as $status => $label ) {
-	$class = '';
+<?php $wp_list_table->views(); ?>
 
-	if ( $status == $comment_status )
-		$class = ' class="current"';
+<form id="comments-form" action="" method="get">
 
-	$status_links[] = "<li><a href=\"edit-comments.php?comment_status=$status\"$class>" . $label . '</a>';
-}
+<?php $wp_list_table->search_box( __( 'Search Comments' ), 'comment' ); ?>
 
-$status_links = apply_filters( 'comment_status_links', $status_links );
-
-echo implode(' | </li>', $status_links) . '</li>';
-unset($status_links);
-?>
-</ul>
-
-<p id="post-search">
-	<input type="text" id="post-search-input" name="s" value="<?php echo $search; ?>" />
-	<input type="submit" value="<?php _e( 'Search Comments' ); ?>" class="button" />
-</p>
-
-<input type="hidden" name="mode" value="<?php echo $mode; ?>" />
-<input type="hidden" name="comment_status" value="<?php echo $comment_status; ?>" />
-</form>
-
-<ul class="view-switch">
-	<li <?php if ( 'detail' == $mode ) echo "class='current'" ?>><a href="<?php echo clean_url(add_query_arg('mode', 'detail', $_SERVER['REQUEST_URI'])) ?>"><?php _e('Detail View') ?></a></li>
-	<li <?php if ( 'list' == $mode ) echo "class='current'" ?>><a href="<?php echo clean_url(add_query_arg('mode', 'list', $_SERVER['REQUEST_URI'])) ?>"><?php _e('List View') ?></a></li>
-</ul>
-
-<?php
-
-if ( isset( $_GET['apage'] ) )
-	$page = abs( (int) $_GET['apage'] );
-else
-	$page = 1;
-
-$start = $offset = ( $page - 1 ) * 20;
-
-list($_comments, $total) = _wp_get_comment_list( $comment_status, $search_dirty, $start, 25 ); // Grab a few extra
-
-$comments = array_slice($_comments, 0, 20);
-$extra_comments = array_slice($_comments, 20);
-
-$page_links = paginate_links( array(
-	'base' => add_query_arg( 'apage', '%#%' ),
-	'format' => '',
-	'total' => ceil($total / 20),
-	'current' => $page
-));
-
-?>
-
-<form id="comments-form" action="" method="post">
-
-<div class="tablenav">
-
-<?php
-if ( $page_links )
-	echo "<div class='tablenav-pages'>$page_links</div>";
-?>
-
-<div class="alignleft">
-<?php if ( 'approved' != $comment_status ): ?>
-<input type="submit" value="<?php _e('Approve'); ?>" name="approveit" class="button-secondary" />
+<?php if ( $post_id ) : ?>
+<input type="hidden" name="p" value="<?php echo esc_attr( intval( $post_id ) ); ?>" />
 <?php endif; ?>
-<input type="submit" value="<?php _e('Mark as Spam'); ?>" name="spamit" class="button-secondary" />
-<?php if ( 'moderated' != $comment_status ): ?>
-<input type="submit" value="<?php _e('Unapprove'); ?>" name="unapproveit" class="button-secondary" />
-<?php endif; ?>
-<input type="submit" value="<?php _e('Delete'); ?>" name="deleteit" class="button-secondary delete" />
-<?php do_action('manage_comments_nav', $comment_status); ?>
-<?php wp_nonce_field('bulk-comments'); ?>
-</div>
+<input type="hidden" name="comment_status" value="<?php echo esc_attr($comment_status); ?>" />
+<input type="hidden" name="pagegen_timestamp" value="<?php echo esc_attr(current_time('mysql', 1)); ?>" />
 
-<br class="clear" />
+<input type="hidden" name="_total" value="<?php echo esc_attr( $wp_list_table->get_pagination_arg('total_items') ); ?>" />
+<input type="hidden" name="_per_page" value="<?php echo esc_attr( $wp_list_table->get_pagination_arg('per_page') ); ?>" />
+<input type="hidden" name="_page" value="<?php echo esc_attr( $wp_list_table->get_pagination_arg('page') ); ?>" />
 
-</div>
+<?php if ( isset($_REQUEST['paged']) ) { ?>
+	<input type="hidden" name="paged" value="<?php echo esc_attr( absint( $_REQUEST['paged'] ) ); ?>" />
+<?php } ?>
 
-<br class="clear" />
-<?php
-if ($comments) {
-?>
-<table class="widefat">
-<thead>
-  <tr>
-    <th scope="col" class="check-column"><input type="checkbox" onclick="checkAll(document.getElementById('comments-form'));" /></th>
-    <th scope="col"><?php _e('Comment') ?></th>
-    <th scope="col"><?php _e('Date') ?></th>
-    <th scope="col" class="action-links"><?php _e('Actions') ?></th>
-  </tr>
-</thead>
-<tbody id="the-comment-list" class="list:comment">
-<?php
-	foreach ($comments as $comment)
-		_wp_comment_row( $comment->comment_ID, $mode, $comment_status );
-?>
-</tbody>
-<tbody id="the-extra-comment-list" class="list:comment" style="display: none;">
-<?php
-	foreach ($extra_comments as $comment)
-		_wp_comment_row( $comment->comment_ID, $mode, $comment_status );
-?>
-</tbody>
-</table>
-
+<?php $wp_list_table->display(); ?>
 </form>
-
-<form id="get-extra-comments" method="post" action="" class="add:the-extra-comment-list:" style="display: none;">
-	<input type="hidden" name="s" value="<?php echo $search; ?>" />
-	<input type="hidden" name="mode" value="<?php echo $mode; ?>" />
-	<input type="hidden" name="comment_status" value="<?php echo $comment_status; ?>" />
-	<input type="hidden" name="page" value="<?php echo isset($_REQUEST['page']) ? absint( $_REQUEST['page'] ) : 1; ?>" />
-	<?php wp_nonce_field( 'add-comment', '_ajax_nonce', false ); ?>
-</form>
+</div>
 
 <div id="ajax-response"></div>
-<?php
-} elseif ( 'moderated' == $_GET['comment_status'] ) {
-?>
-<p>
-<?php _e('No comments awaiting moderation&hellip; yet.') ?>
-</p>
-<?php
-} else  {
-?>
-<p>
-<?php _e('No results found.') ?>
-</p>
-<?php
-}
-?>
-<div class="tablenav">
-<?php
-if ( $page_links )
-	echo "<div class='tablenav-pages'>$page_links</div>";
-?>
-<br class="clear" />
-</div>
 
-</div>
-
-<?php include('admin-footer.php'); ?>
+<?php
+wp_comment_reply('-1', true, 'detail');
+wp_comment_trashnotice();
+include('./admin-footer.php'); ?>

@@ -1,26 +1,49 @@
-jQuery(document).ready( function() {
-	add_postbox_toggles('comment');
+jQuery(document).ready( function($) {
 
-	// close postboxes that should be closed
-	jQuery('.if-js-closed').removeClass('if-js-closed').addClass('closed');
+	postboxes.add_postbox_toggles('comment');
 
-	// show things that should be visible, hide what should be hidden
-	jQuery('.hide-if-no-js').show();
-	jQuery('.hide-if-js').hide();
-
-	jQuery('.edit-timestamp').click(function () {
-		if (jQuery('#timestampdiv').is(":hidden")) {
-			jQuery('#timestampdiv').slideDown("normal");
-			jQuery('.edit-timestamp').text(commentL10n.cancel);
-		} else {
-			jQuery('#timestampdiv').hide();
-			jQuery('#mm').val(jQuery('#hidden_mm').val());
-			jQuery('#jj').val(jQuery('#hidden_jj').val());
-			jQuery('#aa').val(jQuery('#hidden_aa').val());
-			jQuery('#hh').val(jQuery('#hidden_hh').val());
-			jQuery('#mn').val(jQuery('#hidden_mn').val());
-			jQuery('.edit-timestamp').text(commentL10n.edit);
+	var stamp = $('#timestamp').html();
+	$('.edit-timestamp').click(function () {
+		if ($('#timestampdiv').is(":hidden")) {
+			$('#timestampdiv').slideDown("normal");
+			$('.edit-timestamp').hide();
 		}
 		return false;
-    });
+	});
+
+	$('.cancel-timestamp').click(function() {
+		$('#timestampdiv').slideUp("normal");
+		$('#mm').val($('#hidden_mm').val());
+		$('#jj').val($('#hidden_jj').val());
+		$('#aa').val($('#hidden_aa').val());
+		$('#hh').val($('#hidden_hh').val());
+		$('#mn').val($('#hidden_mn').val());
+		$('#timestamp').html(stamp);
+		$('.edit-timestamp').show();
+		return false;
+	});
+
+	$('.save-timestamp').click(function () { // crazyhorse - multiple ok cancels
+		var aa = $('#aa').val(), mm = $('#mm').val(), jj = $('#jj').val(), hh = $('#hh').val(), mn = $('#mn').val(),
+			newD = new Date( aa, mm - 1, jj, hh, mn );
+
+		if ( newD.getFullYear() != aa || (1 + newD.getMonth()) != mm || newD.getDate() != jj || newD.getMinutes() != mn ) {
+			$('.timestamp-wrap', '#timestampdiv').addClass('form-invalid');
+			return false;
+		} else {
+			$('.timestamp-wrap', '#timestampdiv').removeClass('form-invalid');
+		}
+
+		$('#timestampdiv').slideUp("normal");
+		$('.edit-timestamp').show();
+		$('#timestamp').html(
+			commentL10n.submittedOn + ' <b>' +
+			$( '#mm option[value="' + mm + '"]' ).text() + ' ' +
+			jj + ', ' +
+			aa + ' @ ' +
+			hh + ':' +
+			mn + '</b> '
+		);
+		return false;
+	});
 });

@@ -1,75 +1,138 @@
 <?php
+/**
+ * WordPress Administration Template Header
+ *
+ * @package WordPress
+ * @subpackage Administration
+ */
+
 @header('Content-Type: ' . get_option('html_type') . '; charset=' . get_option('blog_charset'));
-if (!isset($_GET["page"])) require_once('admin.php');
-if ( $editing ) {
-	if ( user_can_richedit() )
-		wp_enqueue_script( 'wp_tiny_mce' );
-}
+if ( ! defined( 'WP_ADMIN' ) )
+	require_once( './admin.php' );
 
-$min_width_pages = array( 'post.php', 'post-new.php', 'page.php', 'page-new.php', 'widgets.php', 'comment.php', 'link.php' );
-$the_current_page = preg_replace('|^.*/wp-admin/|i', '', $_SERVER['PHP_SELF']);
-$ie6_no_scrollbar = true;
+// In case admin-header.php is included in a function.
+global $title, $hook_suffix, $current_screen, $wp_locale, $pagenow, $wp_version,
+	$current_site, $update_title, $total_update_count, $parent_file;
 
-function add_minwidth($c) {
-	return $c . 'minwidth ';
-}
-
-if ( in_array( $the_current_page, $min_width_pages ) ) {
-		$ie6_no_scrollbar = false;
-		add_filter( 'admin_body_class', 'add_minwidth' );
-}
+// Catch plugins that include admin-header.php before admin.php completes.
+if ( empty( $current_screen ) )
+	set_current_screen();
 
 get_admin_page_title();
+$title = esc_html( strip_tags( $title ) );
 
+if ( is_network_admin() )
+	$admin_title = __( 'Network Admin' );
+elseif ( is_user_admin() )
+	$admin_title = __( 'Global Dashboard' );
+else
+	$admin_title = get_bloginfo( 'name' );
+
+if ( $admin_title == $title )
+	$admin_title = sprintf( __( '%1$s &#8212; WordPress' ), $title );
+else
+	$admin_title = sprintf( __( '%1$s &lsaquo; %2$s &#8212; WordPress' ), $title, $admin_title );
+
+$admin_title = apply_filters( 'admin_title', $admin_title, $title );
+
+wp_user_settings();
+
+_wp_admin_html_begin();
 ?>
-<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
-<html xmlns="http://www.w3.org/1999/xhtml" <?php do_action('admin_xml_ns'); ?> <?php language_attributes(); ?>>
-<head>
-<meta http-equiv="Content-Type" content="<?php bloginfo('html_type'); ?>; charset=<?php echo get_option('blog_charset'); ?>" />
-<title><?php bloginfo('name') ?> &rsaquo; <?php echo wp_specialchars( strip_tags( $title ) ); ?> &#8212; WordPress</title>
+<title><?php echo $admin_title; ?></title>
 <?php
-wp_admin_css( 'css/global' );
-wp_admin_css();
-wp_admin_css( 'css/colors' );
-?>
-<!--[if gte IE 6]>
-<?php wp_admin_css( 'css/ie' );
-?>
-<![endif]-->
-<script type="text/javascript">
-//<![CDATA[
-addLoadEvent = function(func) {if (typeof jQuery != "undefined") jQuery(document).ready(func); else if (typeof wpOnload!='function'){wpOnload=func;} else {var oldonload=wpOnload; wpOnload=function(){oldonload();func();}}};
-//]]>
-</script>
-<?php if ( ($parent_file != 'link-manager.php') && ($parent_file != 'options-general.php') && $ie6_no_scrollbar ) : ?>
-<style type="text/css">* html { overflow-x: hidden; }</style>
-<?php endif;
-if ( isset($page_hook) )
-	do_action('admin_print_scripts-' . $page_hook);
-else if ( isset($plugin_page) )
-	do_action('admin_print_scripts-' . $plugin_page);
-do_action('admin_print_scripts');
 
-if ( isset($page_hook) )
-	do_action('admin_head-' . $page_hook);
-else if ( isset($plugin_page) )
-	do_action('admin_head-' . $plugin_page);
+wp_enqueue_style( 'colors' );
+wp_enqueue_style( 'ie' );
+wp_enqueue_script('utils');
+
+$admin_body_class = preg_replace('/[^a-z0-9_-]+/i', '-', $hook_suffix);
+?>
+<script type="text/javascript">
+addLoadEvent = function(func){if(typeof jQuery!="undefined")jQuery(document).ready(func);else if(typeof wpOnload!='function'){wpOnload=func;}else{var oldonload=wpOnload;wpOnload=function(){oldonload();func();}}};
+var ajaxurl = '<?php echo admin_url( 'admin-ajax.php', 'relative' ); ?>',
+	pagenow = '<?php echo $current_screen->id; ?>',
+	typenow = '<?php echo $current_screen->post_type; ?>',
+	adminpage = '<?php echo $admin_body_class; ?>',
+	thousandsSeparator = '<?php echo addslashes( $wp_locale->number_format['thousands_sep'] ); ?>',
+	decimalPoint = '<?php echo addslashes( $wp_locale->number_format['decimal_point'] ); ?>',
+	isRtl = <?php echo (int) is_rtl(); ?>;
+</script>
+<?php
+
+do_action('admin_enqueue_scripts', $hook_suffix);
+do_action("admin_print_styles-$hook_suffix");
+do_action('admin_print_styles');
+do_action("admin_print_scripts-$hook_suffix");
+do_action('admin_print_scripts');
+do_action("admin_head-$hook_suffix");
 do_action('admin_head');
+
+if ( get_user_setting('mfold') == 'f' )
+	$admin_body_class .= ' folded';
+
+if ( !get_user_setting('unfold') )
+	$admin_body_class .= ' auto-fold';
+
+if ( is_admin_bar_showing() )
+	$admin_body_class .= ' admin-bar';
+
+if ( is_rtl() )
+	$admin_body_class .= ' rtl';
+
+$admin_body_class .= ' branch-' . str_replace( array( '.', ',' ), '-', floatval( $wp_version ) );
+$admin_body_class .= ' version-' . str_replace( '.', '-', preg_replace( '/^([.0-9]+).*/', '$1', $wp_version ) );
+$admin_body_class .= ' admin-color-' . sanitize_html_class( get_user_option( 'admin_color' ), 'fresh' );
+$admin_body_class .= ' locale-' . sanitize_html_class( strtolower( str_replace( '_', '-', get_locale() ) ) );
+
+if ( wp_is_mobile() )
+	$admin_body_class .= ' mobile';
+
+$admin_body_class .= ' no-customize-support';
+
 ?>
 </head>
-<body class="wp-admin <?php echo apply_filters( 'admin_body_class', '' ); ?>">
-<div id="wpwrap">
-<div id="wpcontent">
-<div id="wphead">
-<h1><?php bloginfo('name'); ?><span id="viewsite"><a href="<?php echo trailingslashit( get_option('home') ); ?>"><?php _e('Visit Site') ?></a></span></h1>
-</div>
-<div id="user_info"><p><?php printf(__('Howdy, <a href="%1$s">%2$s</a>!'), 'profile.php', $user_identity) ?> | <a href="<?php echo get_option('siteurl'); ?>/wp-login.php?action=logout" title="<?php _e('Log Out') ?>"><?php _e('Log Out'); ?></a> | <?php _e('<a href="http://codex.wordpress.org/">Help</a>') ?> | <?php _e('<a href="http://wordpress.org/support/">Forums</a>') ?></p></div>
+<body class="wp-admin wp-core-ui no-js <?php echo apply_filters( 'admin_body_class', '' ) . " $admin_body_class"; ?>">
+<script type="text/javascript">
+	document.body.className = document.body.className.replace('no-js','js');
+</script>
 
 <?php
-require(ABSPATH . 'wp-admin/menu-header.php');
-
-if ( $parent_file == 'options-general.php' ) {
-	require(ABSPATH . 'wp-admin/options-head.php');
-}
+// Make sure the customize body classes are correct as early as possible. 
+if ( current_user_can( 'edit_theme_options' ) )
+	wp_customize_support_script();
 ?>
+
+<div id="wpwrap">
+<a tabindex="1" href="#wpbody-content" class="screen-reader-shortcut"><?php _e('Skip to main content'); ?></a>
+<?php require(ABSPATH . 'wp-admin/menu-header.php'); ?>
+<div id="wpcontent">
+
+<?php
+do_action('in_admin_header');
+?>
+
 <div id="wpbody">
+<?php
+unset($title_class, $blog_name, $total_update_count, $update_title);
+
+$current_screen->set_parentage( $parent_file );
+
+?>
+
+<div id="wpbody-content" aria-label="<?php esc_attr_e('Main content'); ?>" tabindex="0">
+<?php
+
+$current_screen->render_screen_meta();
+
+if ( is_network_admin() )
+	do_action('network_admin_notices');
+elseif ( is_user_admin() )
+	do_action('user_admin_notices');
+else
+	do_action('admin_notices');
+
+do_action('all_admin_notices');
+
+if ( $parent_file == 'options-general.php' )
+	require(ABSPATH . 'wp-admin/options-head.php');

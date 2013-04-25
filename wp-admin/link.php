@@ -1,19 +1,30 @@
 <?php
+/**
+ * Manage link administration actions.
+ *
+ * This page is accessed by the link management pages and handles the forms and
+ * AJAX processes for link actions.
+ *
+ * @package WordPress
+ * @subpackage Administration
+ */
+
+/** Load WordPress Administration Bootstrap */
 require_once ('admin.php');
 
-wp_reset_vars(array('action', 'cat_id', 'linkurl', 'name', 'image', 'description', 'visible', 'target', 'category', 'link_id', 'submit', 'order_by', 'links_show_cat_id', 'rating', 'rel', 'notes', 'linkcheck[]'));
+wp_reset_vars( array( 'action', 'cat_id', 'link_id' ) );
 
 if ( ! current_user_can('manage_links') )
-	wp_die( __('You do not have sufficient permissions to edit the links for this blog.') );
+	wp_link_manager_disabled_message();
 
-if ('' != $_POST['deletebookmarks'])
+if ( !empty($_POST['deletebookmarks']) )
 	$action = 'deletebookmarks';
-if ('' != $_POST['move'])
+if ( !empty($_POST['move']) )
 	$action = 'move';
-if ('' != $_POST['linkcheck'])
-	$linkcheck = $_POST[linkcheck];
+if ( !empty($_POST['linkcheck']) )
+	$linkcheck = $_POST['linkcheck'];
 
-$this_file = 'link-manager.php';
+$this_file = admin_url('link-manager.php');
 
 switch ($action) {
 	case 'deletebookmarks' :
@@ -56,9 +67,11 @@ switch ($action) {
 	case 'add' :
 		check_admin_referer('add-bookmark');
 
-		add_link();
+		$redir = wp_get_referer();
+		if ( add_link() )
+			$redir = add_query_arg( 'added', 'true', $redir );
 
-		wp_redirect( wp_get_referer() . '?added=true' );
+		wp_redirect( $redir );
 		exit;
 		break;
 
@@ -85,9 +98,11 @@ switch ($action) {
 	case 'edit' :
 		wp_enqueue_script('link');
 		wp_enqueue_script('xfn');
-		wp_enqueue_script('thickbox');
 
-		$parent_file = 'edit.php';
+		if ( wp_is_mobile() )
+			wp_enqueue_script( 'jquery-touch-punch' );
+
+		$parent_file = 'link-manager.php';
 		$submenu_file = 'link-manager.php';
 		$title = __('Edit Link');
 
@@ -96,7 +111,6 @@ switch ($action) {
 		if (!$link = get_link_to_edit($link_id))
 			wp_die(__('Link not found.'));
 
-		include_once ('admin-header.php');
 		include ('edit-link-form.php');
 		include ('admin-footer.php');
 		break;
@@ -104,4 +118,3 @@ switch ($action) {
 	default :
 		break;
 }
-?>

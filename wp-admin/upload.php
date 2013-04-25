@@ -1,249 +1,250 @@
 <?php
-require_once('admin.php');
+/**
+ * Media Library administration panel.
+ *
+ * @package WordPress
+ * @subpackage Administration
+ */
 
-if (!current_user_can('upload_files'))
-	wp_die(__('You do not have permission to upload files.'));
+/** WordPress Administration Bootstrap */
+require_once( './admin.php' );
 
-// Handle bulk deletes
-if ( isset($_GET['deleteit']) && isset($_GET['delete']) ) {
+if ( !current_user_can('upload_files') )
+	wp_die( __( 'You do not have permission to upload files.' ) );
+
+$wp_list_table = _get_list_table('WP_Media_List_Table');
+$pagenum = $wp_list_table->get_pagenum();
+
+// Handle bulk actions
+$doaction = $wp_list_table->current_action();
+
+if ( $doaction ) {
 	check_admin_referer('bulk-media');
-	foreach( (array) $_GET['delete'] as $post_id_del ) {
-		$post_del = & get_post($post_id_del);
 
-		if ( !current_user_can('delete_post', $post_id_del) )
-			wp_die( __('You are not allowed to delete this post.') );
-
-		if ( $post_del->post_type == 'attachment' )
-			if ( ! wp_delete_attachment($post_id_del) )
-				wp_die( __('Error in deleting...') );
+	if ( 'delete_all' == $doaction ) {
+		$post_ids = $wpdb->get_col( "SELECT ID FROM $wpdb->posts WHERE post_type='attachment' AND post_status = 'trash'" );
+		$doaction = 'delete';
+	} elseif ( isset( $_REQUEST['media'] ) ) {
+		$post_ids = $_REQUEST['media'];
+	} elseif ( isset( $_REQUEST['ids'] ) ) {
+		$post_ids = explode( ',', $_REQUEST['ids'] );
 	}
 
 	$location = 'upload.php';
 	if ( $referer = wp_get_referer() ) {
-		if ( false !== strpos($referer, 'upload.php') )
-			$location = $referer;
+		if ( false !== strpos( $referer, 'upload.php' ) )
+			$location = remove_query_arg( array( 'trashed', 'untrashed', 'deleted', 'message', 'ids', 'posted' ), $referer );
 	}
 
-	$location = add_query_arg('message', 2, $location);
-	$location = remove_query_arg('posted', $location);
-	wp_redirect($location);
+	switch ( $doaction ) {
+		case 'find_detached':
+			if ( !current_user_can('edit_posts') )
+				wp_die( __('You are not allowed to scan for lost attachments.') );
+
+			$lost = $wpdb->get_col( "
+				SELECT ID FROM $wpdb->posts
+				WHERE post_type = 'attachment' AND post_parent > '0'
+				AND post_parent NOT IN (
+					SELECT ID FROM $wpdb->posts
+					WHERE post_type NOT IN ( 'attachment', '" . join( "', '", get_post_types( array( 'public' => false ) ) ) . "' )
+				)
+			" );
+
+			$_REQUEST['detached'] = 1;
+			break;
+		case 'attach':
+			$parent_id = (int) $_REQUEST['found_post_id'];
+			if ( !$parent_id )
+				return;
+
+			$parent = get_post( $parent_id );
+			if ( !current_user_can( 'edit_post', $parent_id ) )
+				wp_die( __( 'You are not allowed to edit this post.' ) );
+
+			$attach = array();
+			foreach ( (array) $_REQUEST['media'] as $att_id ) {
+				$att_id = (int) $att_id;
+
+				if ( !current_user_can( 'edit_post', $att_id ) )
+					continue;
+
+				$attach[] = $att_id;
+			}
+
+			if ( ! empty( $attach ) ) {
+				$attach_string = implode( ',', $attach );
+				$attached = $wpdb->query( $wpdb->prepare( "UPDATE $wpdb->posts SET post_parent = %d WHERE post_type = 'attachment' AND ID IN ( $attach_string )", $parent_id ) );
+				foreach ( $attach as $att_id ) {
+					clean_attachment_cache( $att_id );
+				}
+			}
+
+			if ( isset( $attached ) ) {
+				$location = 'upload.php';
+				if ( $referer = wp_get_referer() ) {
+					if ( false !== strpos( $referer, 'upload.php' ) )
+						$location = $referer;
+				}
+
+				$location = add_query_arg( array( 'attached' => $attached ) , $location );
+				wp_redirect( $location );
+				exit;
+			}
+			break;
+		case 'trash':
+			if ( !isset( $post_ids ) )
+				break;
+			foreach ( (array) $post_ids as $post_id ) {
+				if ( !current_user_can( 'delete_post', $post_id ) )
+					wp_die( __( 'You are not allowed to move this post to the trash.' ) );
+
+				if ( !wp_trash_post( $post_id ) )
+					wp_die( __( 'Error in moving to trash...' ) );
+			}
+			$location = add_query_arg( array( 'trashed' => count( $post_ids ), 'ids' => join( ',', $post_ids ) ), $location );
+			break;
+		case 'untrash':
+			if ( !isset( $post_ids ) )
+				break;
+			foreach ( (array) $post_ids as $post_id ) {
+				if ( !current_user_can( 'delete_post', $post_id ) )
+					wp_die( __( 'You are not allowed to move this post out of the trash.' ) );
+
+				if ( !wp_untrash_post( $post_id ) )
+					wp_die( __( 'Error in restoring from trash...' ) );
+			}
+			$location = add_query_arg( 'untrashed', count( $post_ids ), $location );
+			break;
+		case 'delete':
+			if ( !isset( $post_ids ) )
+				break;
+			foreach ( (array) $post_ids as $post_id_del ) {
+				if ( !current_user_can( 'delete_post', $post_id_del ) )
+					wp_die( __( 'You are not allowed to delete this post.' ) );
+
+				if ( !wp_delete_attachment( $post_id_del ) )
+					wp_die( __( 'Error in deleting...' ) );
+			}
+			$location = add_query_arg( 'deleted', count( $post_ids ), $location );
+			break;
+	}
+
+	wp_redirect( $location );
 	exit;
-} elseif ( !empty($_GET['_wp_http_referer']) ) {
-	wp_redirect(remove_query_arg(array('_wp_http_referer', '_wpnonce'), stripslashes($_SERVER['REQUEST_URI'])));
-	exit;
+} elseif ( ! empty( $_GET['_wp_http_referer'] ) ) {
+	 wp_redirect( remove_query_arg( array( '_wp_http_referer', '_wpnonce' ), wp_unslash( $_SERVER['REQUEST_URI'] ) ) );
+	 exit;
 }
 
+$wp_list_table->prepare_items();
+
 $title = __('Media Library');
-$parent_file = 'edit.php';
-wp_enqueue_script( 'admin-forms' );
+$parent_file = 'upload.php';
 
-list($post_mime_types, $avail_post_mime_types) = wp_edit_attachments_query();
+wp_enqueue_script( 'wp-ajax-response' );
+wp_enqueue_script( 'jquery-ui-draggable' );
+wp_enqueue_script( 'media' );
 
-if ( is_singular() )
-	wp_enqueue_script( 'admin-comments' );
+add_screen_option( 'per_page', array('label' => _x( 'Media items', 'items per page (screen options)' )) );
 
-require_once('admin-header.php');
+get_current_screen()->add_help_tab( array(
+'id'		=> 'overview',
+'title'		=> __('Overview'),
+'content'	=>
+	'<p>' . __( 'All the files you&#8217;ve uploaded are listed in the Media Library, with the most recent uploads listed first. You can use the Screen Options tab to customize the display of this screen.' ) . '</p>' .
+	'<p>' . __( 'You can narrow the list by file type/status using the text link filters at the top of the screen. You also can refine the list by date using the dropdown menu above the media table.' ) . '</p>'
+) );
+get_current_screen()->add_help_tab( array(
+'id'		=> 'actions-links',
+'title'		=> __('Available Actions'),
+'content'	=>
+	'<p>' . __( 'Hovering over a row reveals action links: Edit, Delete Permanently, and View. Clicking Edit or on the media file&#8217;s name displays a simple screen to edit that individual file&#8217;s metadata. Clicking Delete Permanently will delete the file from the media library (as well as from any posts to which it is currently attached). View will take you to the display page for that file.' ) . '</p>'
+) );
+get_current_screen()->add_help_tab( array(
+'id'		=> 'attaching-files',
+'title'		=> __('Attaching Files'),
+'content'	=>
+	'<p>' . __( 'If a media file has not been attached to any post, you will see that in the Attached To column, and can click on Attach File to launch a small popup that will allow you to search for a post and attach the file.' ) . '</p>'
+) );
 
-if ( !isset( $_GET['paged'] ) )
-	$_GET['paged'] = 1;
+get_current_screen()->set_help_sidebar(
+	'<p><strong>' . __( 'For more information:' ) . '</strong></p>' .
+	'<p>' . __( '<a href="http://codex.wordpress.org/Media_Library_Screen" target="_blank">Documentation on Media Library</a>' ) . '</p>' .
+	'<p>' . __( '<a href="http://wordpress.org/support/" target="_blank">Support Forums</a>' ) . '</p>'
+);
 
+require_once('./admin-header.php');
 ?>
 
 <div class="wrap">
+<?php screen_icon(); ?>
+<h2>
+<?php
+echo esc_html( $title );
+if ( current_user_can( 'upload_files' ) ) { ?>
+	<a href="media-new.php" class="add-new-h2"><?php echo esc_html_x('Add New', 'file'); ?></a><?php
+}
+if ( ! empty( $_REQUEST['s'] ) )
+	printf( '<span class="subtitle">' . __('Search results for &#8220;%s&#8221;') . '</span>', get_search_query() ); ?>
+</h2>
+
+<?php
+$message = '';
+if ( ! empty( $_GET['posted'] ) ) {
+	$message = __('Media attachment updated.');
+	$_SERVER['REQUEST_URI'] = remove_query_arg(array('posted'), $_SERVER['REQUEST_URI']);
+}
+
+if ( ! empty( $_GET['attached'] ) && $attached = absint( $_GET['attached'] ) ) {
+	$message = sprintf( _n('Reattached %d attachment.', 'Reattached %d attachments.', $attached), $attached );
+	$_SERVER['REQUEST_URI'] = remove_query_arg(array('attached'), $_SERVER['REQUEST_URI']);
+}
+
+if ( ! empty( $_GET['deleted'] ) && $deleted = absint( $_GET['deleted'] ) ) {
+	$message = sprintf( _n( 'Media attachment permanently deleted.', '%d media attachments permanently deleted.', $deleted ), number_format_i18n( $_GET['deleted'] ) );
+	$_SERVER['REQUEST_URI'] = remove_query_arg(array('deleted'), $_SERVER['REQUEST_URI']);
+}
+
+if ( ! empty( $_GET['trashed'] ) && $trashed = absint( $_GET['trashed'] ) ) {
+	$message = sprintf( _n( 'Media attachment moved to the trash.', '%d media attachments moved to the trash.', $trashed ), number_format_i18n( $_GET['trashed'] ) );
+	$message .= ' <a href="' . esc_url( wp_nonce_url( 'upload.php?doaction=undo&action=untrash&ids='.(isset($_GET['ids']) ? $_GET['ids'] : ''), "bulk-media" ) ) . '">' . __('Undo') . '</a>';
+	$_SERVER['REQUEST_URI'] = remove_query_arg(array('trashed'), $_SERVER['REQUEST_URI']);
+}
+
+if ( ! empty( $_GET['untrashed'] ) && $untrashed = absint( $_GET['untrashed'] ) ) {
+	$message = sprintf( _n( 'Media attachment restored from the trash.', '%d media attachments restored from the trash.', $untrashed ), number_format_i18n( $_GET['untrashed'] ) );
+	$_SERVER['REQUEST_URI'] = remove_query_arg(array('untrashed'), $_SERVER['REQUEST_URI']);
+}
+
+$messages[1] = __('Media attachment updated.');
+$messages[2] = __('Media permanently deleted.');
+$messages[3] = __('Error saving media attachment.');
+$messages[4] = __('Media moved to the trash.') . ' <a href="' . esc_url( wp_nonce_url( 'upload.php?doaction=undo&action=untrash&ids='.(isset($_GET['ids']) ? $_GET['ids'] : ''), "bulk-media" ) ) . '">' . __('Undo') . '</a>';
+$messages[5] = __('Media restored from the trash.');
+
+if ( ! empty( $_GET['message'] ) && isset( $messages[ $_GET['message'] ] ) ) {
+	$message = $messages[ $_GET['message'] ];
+	$_SERVER['REQUEST_URI'] = remove_query_arg(array('message'), $_SERVER['REQUEST_URI']);
+}
+
+if ( !empty($message) ) { ?>
+<div id="message" class="updated"><p><?php echo $message; ?></p></div>
+<?php } ?>
+
+<?php $wp_list_table->views(); ?>
 
 <form id="posts-filter" action="" method="get">
-<h2><?php
-if ( is_singular() ) {
-	printf(__('Comments on %s'), apply_filters( "the_title", $post->post_title));
-} else {
-	$post_mime_type_label = _c('Manage Media|manage media header');
-	if ( isset($_GET['post_mime_type']) && in_array( $_GET['post_mime_type'], array_keys($post_mime_types) ) )
-        $post_mime_type_label = $post_mime_types[$_GET['post_mime_type']][1];
-	if ( $post_listing_pageable && !is_archive() && !is_search() )
-		$h2_noun = is_paged() ? sprintf(__( 'Previous %s' ), $post_mime_type_label) : sprintf(__('Latest %s'), $post_mime_type_label);
-	else
-		$h2_noun = $post_mime_type_label;
-	// Use $_GET instead of is_ since they can override each other
-	$h2_author = '';
-	$_GET['author'] = (int) $_GET['author'];
-	if ( $_GET['author'] != 0 ) {
-		if ( $_GET['author'] == '-' . $user_ID ) { // author exclusion
-			$h2_author = ' ' . __('by other authors');
-		} else {
-			$author_user = get_userdata( get_query_var( 'author' ) );
-			$h2_author = ' ' . sprintf(__('by %s'), wp_specialchars( $author_user->display_name ));
-		}
-	}
-	$h2_search = isset($_GET['s'])   && $_GET['s']   ? ' ' . sprintf(__('matching &#8220;%s&#8221;'), wp_specialchars( get_search_query() ) ) : '';
-	$h2_cat    = isset($_GET['cat']) && $_GET['cat'] ? ' ' . sprintf( __('in &#8220;%s&#8221;'), single_cat_title('', false) ) : '';
-	$h2_tag    = isset($_GET['tag']) && $_GET['tag'] ? ' ' . sprintf( __('tagged with &#8220;%s&#8221;'), single_tag_title('', false) ) : '';
-	$h2_month  = isset($_GET['m'])   && $_GET['m']   ? ' ' . sprintf( __('during %s'), single_month_title(' ', false) ) : '';
-	printf( _c( '%1$s%2$s%3$s%4$s%5$s%6$s|You can reorder these: 1: Posts, 2: by {s}, 3: matching {s}, 4: in {s}, 5: tagged with {s}, 6: during {s}' ), $h2_noun, $h2_author, $h2_search, $h2_cat, $h2_tag, $h2_month );
-}
-?></h2>
 
-<ul class="subsubsub">
-<?php
-$type_links = array();
-$_num_posts = (array) wp_count_attachments();
-$matches = wp_match_mime_types(array_keys($post_mime_types), array_keys($_num_posts));
-foreach ( $matches as $type => $reals )
-	foreach ( $reals as $real )
-		$num_posts[$type] += $_num_posts[$real];
-$class = empty($_GET['post_mime_type']) ? ' class="current"' : '';
-$type_links[] = "<li><a href=\"upload.php\"$class>".__('All Types')."</a>";
-foreach ( $post_mime_types as $mime_type => $label ) {
-	$class = '';
+<?php $wp_list_table->search_box( __( 'Search Media' ), 'media' ); ?>
 
-	if ( !wp_match_mime_types($mime_type, $avail_post_mime_types) )
-		continue;
-
-	if ( wp_match_mime_types($mime_type, $_GET['post_mime_type']) )
-		$class = ' class="current"';
-
-	$type_links[] = "<li><a href=\"upload.php?post_mime_type=$mime_type\"$class>" .
-	sprintf(__ngettext($label[2][0], $label[2][1], $num_posts[$mime_type]), number_format_i18n( $num_posts[$mime_type] )) . '</a>';
-}
-echo implode(' | </li>', $type_links) . '</li>';
-unset($type_links);
-?>
-</ul>
-
-<?php
-if ( isset($_GET['posted']) && $_GET['posted'] ) : $_GET['posted'] = (int) $_GET['posted']; ?>
-<div id="message" class="updated fade"><p><strong><?php _e('Your media has been saved.'); ?></strong> <a href="<?php echo get_permalink( $_GET['posted'] ); ?>"><?php _e('View media'); ?></a> | <a href="media.php?action=edit&amp;attachment_id=<?php echo $_GET['posted']; ?>"><?php _e('Edit media'); ?></a></p></div>
-<?php $_SERVER['REQUEST_URI'] = remove_query_arg(array('posted'), $_SERVER['REQUEST_URI']);
-endif;
-
-$messages[1] = __('Media updated.');
-$messages[2] = __('Media deleted.');
-
-if (isset($_GET['message'])) : ?>
-<div id="message" class="updated fade"><p><?php echo $messages[$_GET['message']]; ?></p></div>
-<?php $_SERVER['REQUEST_URI'] = remove_query_arg(array('message'), $_SERVER['REQUEST_URI']);
-endif;
-?>
-
-<p id="post-search">
-	<input type="text" id="post-search-input" name="s" value="<?php the_search_query(); ?>" />
-	<input type="submit" value="<?php _e( 'Search Media' ); ?>" class="button" />
-</p>
-
-<?php do_action('restrict_manage_posts'); ?>
-
-<div class="tablenav">
-
-<?php
-$page_links = paginate_links( array(
-	'base' => add_query_arg( 'paged', '%#%' ),
-	'format' => '',
-	'total' => $wp_query->max_num_pages,
-	'current' => $_GET['paged']
-));
-
-if ( $page_links )
-	echo "<div class='tablenav-pages'>$page_links</div>";
-?>
-
-<div class="alignleft">
-<input type="submit" value="<?php _e('Delete'); ?>" name="deleteit" class="button-secondary delete" />
-<?php wp_nonce_field('bulk-media'); ?>
-<?php
-
-if ( !is_singular() ) :
-	$arc_query = "SELECT DISTINCT YEAR(post_date) AS yyear, MONTH(post_date) AS mmonth FROM $wpdb->posts WHERE post_type = 'attachment' ORDER BY post_date DESC";
-
-	$arc_result = $wpdb->get_results( $arc_query );
-
-	$month_count = count($arc_result);
-
-	if ( $month_count && !( 1 == $month_count && 0 == $arc_result[0]->mmonth ) ) : ?>
-<select name='m'>
-<option<?php selected( @$_GET['m'], 0 ); ?> value='0'><?php _e('Show all dates'); ?></option>
-<?php
-foreach ($arc_result as $arc_row) {
-	if ( $arc_row->yyear == 0 )
-		continue;
-	$arc_row->mmonth = zeroise( $arc_row->mmonth, 2 );
-
-	if ( $arc_row->yyear . $arc_row->mmonth == $_GET['m'] )
-		$default = ' selected="selected"';
-	else
-		$default = '';
-
-	echo "<option$default value='$arc_row->yyear$arc_row->mmonth'>";
-	echo $wp_locale->get_month($arc_row->mmonth) . " $arc_row->yyear";
-	echo "</option>\n";
-}
-?>
-</select>
-<?php endif; // month_count ?>
-
-<input type="submit" id="post-query-submit" value="<?php _e('Filter'); ?>" class="button-secondary" />
-
-<?php endif; // is_singular ?>
-
-</div>
-
-<br class="clear" />
-</div>
-
-<br class="clear" />
-
-<?php include( 'edit-attachment-rows.php' ); ?>
-
-</form>
+<?php $wp_list_table->display(); ?>
 
 <div id="ajax-response"></div>
-
-<div class="tablenav">
-
-<?php
-if ( $page_links )
-	echo "<div class='tablenav-pages'>$page_links</div>";
-?>
-
-</div>
-
+<?php find_posts_div(); ?>
 <br class="clear" />
 
-<?php
- 
-if ( 1 == count($posts) && is_singular() ) :
-	
-	$comments = $wpdb->get_results("SELECT * FROM $wpdb->comments WHERE comment_post_ID = $id AND comment_approved != 'spam' ORDER BY comment_date");
-	if ( $comments ) :
-		// Make sure comments, post, and post_author are cached
-		update_comment_cache($comments);
-		$post = get_post($id);
-		$authordata = get_userdata($post->post_author);
-	?>
-
-<br class="clear" />
-
-<table class="widefat" style="margin-top: .5em">
-<thead>
-  <tr>
-    <th scope="col"><?php _e('Comment') ?></th>
-    <th scope="col"><?php _e('Date') ?></th>
-    <th scope="col"><?php _e('Actions') ?></th>
-  </tr>
-</thead>
-<tbody id="the-comment-list" class="list:comment">
-<?php
-        foreach ($comments as $comment)
-                _wp_comment_row( $comment->comment_ID, 'detail', false, false );
-?>
-</tbody>
-</table>
-
-<?php
-
-endif; // comments
-endif; // posts;
-
-?>
-
+</form>
 </div>
 
-<?php include('admin-footer.php'); ?>
+<?php
+include('./admin-footer.php');
