@@ -52,9 +52,9 @@ if ( get_the_author_meta( 'description' ) ) : ?>
 	 * called loop-author.php and that will be used instead.
 	 */
 	 get_template_part( 'loop', 'author' );
+	 //hola que tal
 ?>
 			</div><!-- #content -->
 		</div><!-- #container -->
-
 <?php get_sidebar(); ?>
 <?php get_footer(); ?>
