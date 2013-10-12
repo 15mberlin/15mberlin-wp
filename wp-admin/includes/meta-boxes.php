@@ -9,7 +9,7 @@
  *
  * @param object $post
  */
-function post_submit_meta_box($post) {
+function post_submit_meta_box($post, $args = array() ) {
 	global $action;
 
 	$post_type = $post->post_type;
@@ -171,6 +171,24 @@ if ( 0 != $post->ID ) {
 	$date = date_i18n( $datef, strtotime( current_time('mysql') ) );
 }
 
+if ( ! empty( $args['args']['revisions_count'] ) ) :
+	$revisions_to_keep = wp_revisions_to_keep( $post );
+?>
+<div class="misc-pub-section num-revisions">
+<?php
+	if ( $revisions_to_keep > 0 && $revisions_to_keep <= $args['args']['revisions_count'] ) {
+		echo '<span title="' . esc_attr( sprintf( __( 'Your site is configured to keep only the last %s revisions.' ),
+			number_format_i18n( $revisions_to_keep ) ) ) . '">';
+		printf( __( 'Revisions: %s' ), '<b>' . number_format_i18n( $args['args']['revisions_count'] ) . '+</b>' );
+		echo '</span>';
+	} else {
+		printf( __( 'Revisions: %s' ), '<b>' . number_format_i18n( $args['args']['revisions_count'] ) . '</b>' );
+	}
+?>
+	<a class="hide-if-no-js" href="<?php echo esc_url( get_edit_post_link( $args['args']['revision_id'] ) ); ?>"><?php _ex( 'Browse', 'revisions' ); ?></a>
+</div>
+<?php endif;
+
 if ( $can_publish ) : // Contributors don't get to choose the date of publish ?>
 <div class="misc-pub-section curtime">
 	<span id="timestamp">
@@ -315,9 +333,9 @@ function post_format_meta_box( $post, $box ) {
 			$post_formats[0][] = $post_format;
 	?>
 	<div id="post-formats-select">
-		<input type="radio" name="post_format" class="post-format" id="post-format-0" value="0" <?php checked( $post_format, '0' ); ?> /> <label for="post-format-0"><?php _e('Standard'); ?></label>
+		<input type="radio" name="post_format" class="post-format" id="post-format-0" value="0" <?php checked( $post_format, '0' ); ?> /> <label for="post-format-0" class="post-format-icon post-format-standard"><?php echo get_post_format_string( 'standard' ); ?></label>
 		<?php foreach ( $post_formats[0] as $format ) : ?>
-		<br /><input type="radio" name="post_format" class="post-format" id="post-format-<?php echo esc_attr( $format ); ?>" value="<?php echo esc_attr( $format ); ?>" <?php checked( $post_format, $format ); ?> /> <label for="post-format-<?php echo esc_attr( $format ); ?>"><?php echo esc_html( get_post_format_string( $format ) ); ?></label>
+		<br /><input type="radio" name="post_format" class="post-format" id="post-format-<?php echo esc_attr( $format ); ?>" value="<?php echo esc_attr( $format ); ?>" <?php checked( $post_format, $format ); ?> /> <label for="post-format-<?php echo esc_attr( $format ); ?>" class="post-format-icon post-format-<?php echo esc_attr( $format ); ?>"><?php echo esc_html( get_post_format_string( $format ) ); ?></label>
 		<?php endforeach; ?><br />
 	</div>
 	<?php endif; endif;
@@ -602,8 +620,8 @@ function post_author_meta_box($post) {
  *
  * @param object $post
  */
-function post_revisions_meta_box($post) {
-	wp_list_post_revisions();
+function post_revisions_meta_box( $post ) {
+	wp_list_post_revisions( $post );
 }
 
 // -- Page related Meta Boxes

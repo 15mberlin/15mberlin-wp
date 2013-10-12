@@ -2,8 +2,8 @@
 /**
  * WordPress Query API
  *
- * The query API attempts to get which part of WordPress to the user is on. It
- * also provides functionality to getting URL query information.
+ * The query API attempts to get which part of WordPress the user is on. It
+ * also provides functionality for getting URL query information.
  *
  * @link http://codex.wordpress.org/The_Loop More information on The Loop.
  *
@@ -2237,6 +2237,8 @@ class WP_Query {
 				}
 				if ( ! $post_type )
 					$post_type = 'any';
+				elseif ( count( $post_type ) == 1 )
+					$post_type = $post_type[0];
 
 				$post_status_join = true;
 			} elseif ( in_array('attachment', (array) $post_type) ) {
@@ -2263,25 +2265,30 @@ class WP_Query {
 				}
 
 				$cat_query = wp_list_filter( $tax_query_in_and, array( 'taxonomy' => 'category' ) );
-				if ( !empty( $cat_query ) ) {
+				if ( ! empty( $cat_query ) ) {
 					$cat_query = reset( $cat_query );
-					$the_cat = get_term_by( $cat_query['field'], $cat_query['terms'][0], 'category' );
-					if ( $the_cat ) {
-						$this->set( 'cat', $the_cat->term_id );
-						$this->set( 'category_name', $the_cat->slug );
+
+					if ( ! empty( $cat_query['terms'][0] ) ) {
+						$the_cat = get_term_by( $cat_query['field'], $cat_query['terms'][0], 'category' );
+						if ( $the_cat ) {
+							$this->set( 'cat', $the_cat->term_id );
+							$this->set( 'category_name', $the_cat->slug );
+						}
+						unset( $the_cat );
 					}
-					unset( $the_cat );
 				}
 				unset( $cat_query );
 
 				$tag_query = wp_list_filter( $tax_query_in_and, array( 'taxonomy' => 'post_tag' ) );
-				if ( !empty( $tag_query ) ) {
+				if ( ! empty( $tag_query ) ) {
 					$tag_query = reset( $tag_query );
-					$the_tag = get_term_by( $tag_query['field'], $tag_query['terms'][0], 'post_tag' );
-					if ( $the_tag ) {
-						$this->set( 'tag_id', $the_tag->term_id );
+
+					if ( ! empty( $tag_query['terms'][0] ) ) {
+						$the_tag = get_term_by( $tag_query['field'], $tag_query['terms'][0], 'post_tag' );
+						if ( $the_tag )
+							$this->set( 'tag_id', $the_tag->term_id );
+						unset( $the_tag );
 					}
-					unset( $the_tag );
 				}
 				unset( $tag_query );
 			}
@@ -2403,9 +2410,11 @@ class WP_Query {
 				$orderby .= " {$q['order']}";
 		}
 
-		if ( is_array( $post_type ) ) {
+		if ( is_array( $post_type ) && count( $post_type ) > 1 ) {
 			$post_type_cap = 'multiple_post_type';
 		} else {
+			if ( is_array( $post_type ) )
+				$post_type = reset( $post_type );
 			$post_type_object = get_post_type_object( $post_type );
 			if ( empty( $post_type_object ) )
 				$post_type_cap = $post_type;
@@ -2431,14 +2440,13 @@ class WP_Query {
 			$post_type_object = get_post_type_object ( 'post' );
 		}
 
+		$edit_cap = 'edit_post';
+		$read_cap = 'read_post';
+
 		if ( ! empty( $post_type_object ) ) {
-			$edit_cap = $post_type_object->cap->edit_post;
-			$read_cap = $post_type_object->cap->read_post;
 			$edit_others_cap = $post_type_object->cap->edit_others_posts;
 			$read_private_cap = $post_type_object->cap->read_private_posts;
 		} else {
-			$edit_cap = 'edit_' . $post_type_cap;
-			$read_cap = 'read_' . $post_type_cap;
 			$edit_others_cap = 'edit_others_' . $post_type_cap . 's';
 			$read_private_cap = 'read_private_' . $post_type_cap . 's';
 		}
@@ -2809,7 +2817,7 @@ class WP_Query {
 	function set_found_posts( $q, $limits ) {
 		global $wpdb;
 
-		// Bail if posts is an empty array. Continue if posts is an empty string
+		// Bail if posts is an empty array. Continue if posts is an empty string,
 		// null, or false to accommodate caching plugins that fill posts later.
 		if ( $q['no_found_rows'] || ( is_array( $this->posts ) && ! $this->posts ) )
 			return;
@@ -3621,52 +3629,6 @@ function wp_old_slug_redirect() {
 		exit;
 	endif;
 }
-/**
- * Split the passed content by <!--nextpage-->
- *
- * @since 3.6.0
- *
- * @param string $content Content to split.
- * @return array Paged content.
- */
-function paginate_content( $content ) {
-	$content = str_replace( "\n<!--nextpage-->\n", '<!--nextpage-->', $content );
-	$content = str_replace( "\n<!--nextpage-->",   '<!--nextpage-->', $content );
-	$content = str_replace( "<!--nextpage-->\n",   '<!--nextpage-->', $content );
-	return explode( '<!--nextpage-->', $content );
-}
-
-/**
- * Return content offset by $page
- *
- * @since 3.6.0
- *
- * @param string $content
- * @param int $paged
- * @return string
- */
-function get_paged_content( $content = '', $paged = 0 ) {
-	global $page;
-	if ( empty( $page ) )
-		$page = 1;
-
-	if ( empty( $paged ) )
-		$paged = $page;
-
-	if ( empty( $content ) ) {
-		$post = get_post();
-		if ( empty( $post ) )
-			return '';
-
-		$content = $post->post_content;
-	}
-
-	$pages = paginate_content( $content );
-	if ( isset( $pages[$paged - 1] ) )
-		return $pages[$paged - 1];
-
-	return reset( $pages );
-}
 
 /**
  * Set up global post data.
@@ -3677,8 +3639,8 @@ function get_paged_content( $content = '', $paged = 0 ) {
  * @uses do_action_ref_array() Calls 'the_post'
  * @return bool True when finished.
  */
-function setup_postdata($post) {
-	global $id, $authordata, $currentday, $currentmonth, $page, $pages, $format_pages, $multipage, $more, $numpages;
+function setup_postdata( $post ) {
+	global $id, $authordata, $currentday, $currentmonth, $page, $pages, $multipage, $more, $numpages;
 
 	$id = (int) $post->ID;
 
@@ -3687,49 +3649,28 @@ function setup_postdata($post) {
 	$currentday = mysql2date('d.m.y', $post->post_date, false);
 	$currentmonth = mysql2date('m', $post->post_date, false);
 	$numpages = 1;
+	$multipage = 0;
 	$page = get_query_var('page');
-	if ( !$page )
+	if ( ! $page )
 		$page = 1;
 	if ( is_single() || is_page() || is_feed() )
 		$more = 1;
-	$split_content = $content = $post->post_content;
-	$format = get_post_format( $post );
-	if ( $format && in_array( $format, array( 'image', 'audio', 'video', 'quote' ) ) ) {
-		switch ( $format ) {
-		case 'image':
-			get_the_post_format_image( 'full', $post );
-			if ( isset( $post->split_content ) )
-				$split_content = $post->split_content;
-			break;
-		case 'audio':
-			get_the_post_format_media( 'audio', $post, 1 );
-			if ( isset( $post->split_content ) )
-				$split_content = $post->split_content;
-			break;
-		case 'video':
-			get_the_post_format_media( 'video', $post, 1 );
-			if ( isset( $post->split_content ) )
-				$split_content = $post->split_content;
-			break;
-		case 'quote':
-			get_the_post_format_quote( $post );
-			if ( isset( $post->split_content ) )
-				$split_content = $post->split_content;
-			break;
-		}
-	}
-
-	if ( strpos( $content, '<!--nextpage-->' ) ) {
+	$content = $post->post_content;
+	if ( false !== strpos( $content, '<!--nextpage-->' ) ) {
 		if ( $page > 1 )
 			$more = 1;
-		$multipage = 1;
-		$pages = paginate_content( $content );
-		$format_pages = paginate_content( $split_content );
-		$numpages = count( $pages );
+		$content = str_replace( "\n<!--nextpage-->\n", '<!--nextpage-->', $content );
+		$content = str_replace( "\n<!--nextpage-->", '<!--nextpage-->', $content );
+		$content = str_replace( "<!--nextpage-->\n", '<!--nextpage-->', $content );
+		// Ignore nextpage at the beginning of the content.
+		if ( 0 === strpos( $content, '<!--nextpage-->' ) )
+			$content = substr( $content, 15 );
+		$pages = explode('<!--nextpage-->', $content);
+		$numpages = count($pages);
+		if ( $numpages > 1 )
+			$multipage = 1;
 	} else {
 		$pages = array( $post->post_content );
-		$format_pages = array( $split_content );
-		$multipage = 0;
 	}
 
 	do_action_ref_array('the_post', array(&$post));

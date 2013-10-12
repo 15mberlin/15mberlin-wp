@@ -87,7 +87,7 @@ final class WP_Theme implements ArrayAccess {
 	/**
 	 * The directory name of the theme's files, inside the theme root.
 	 *
-	 * In the case of a child theme, this is directory name of the the child theme.
+	 * In the case of a child theme, this is directory name of the child theme.
 	 * Otherwise, 'stylesheet' is the same as 'template'.
 	 *
 	 * @access private
@@ -652,7 +652,7 @@ final class WP_Theme implements ArrayAccess {
 					static $attr = null;
 					if ( ! isset( $attr ) )
 						$attr = esc_attr__( 'Visit author homepage' );
-					$value = sprintf( '<a href="%1$s" title="%2$s" target="_blank">%3$s</a>', $this->display( 'AuthorURI', true, $translate ), $attr, $value );
+					$value = sprintf( '<a href="%1$s" title="%2$s">%3$s</a>', $this->display( 'AuthorURI', true, $translate ), $attr, $value );
 				} elseif ( ! $value ) {
 					$value = __( 'Anonymous' );
 				}
@@ -720,7 +720,7 @@ final class WP_Theme implements ArrayAccess {
 	/**
 	 * The directory name of the theme's "stylesheet" files, inside the theme root.
 	 *
-	 * In the case of a child theme, this is directory name of the the child theme.
+	 * In the case of a child theme, this is directory name of the child theme.
 	 * Otherwise, get_stylesheet() is the same as get_template().
 	 *
 	 * @since 3.4.0

@@ -29,6 +29,9 @@ if ( post_type_supports($post_type, 'editor') || post_type_supports($post_type, 
 	wp_enqueue_media( array( 'post' => $post_ID ) );
 }
 
+// Add the local autosave notice HTML
+add_action( 'admin_footer', '_local_storage_notice' );
+
 $messages = array();
 $messages['post'] = array(
 	 0 => '', // Unused. Messages start at index 1.
@@ -95,6 +98,9 @@ if ( $autosave && mysql2date( 'U', $autosave->post_modified_gmt, false ) > mysql
 			break;
 		}
 	}
+	// If this autosave isn't different from the current post, begone.
+	if ( ! $notice )
+		wp_delete_post_revision( $autosave->ID );
 	unset($autosave_field, $_autosave_field);
 }
 
@@ -103,14 +109,34 @@ $post_type_object = get_post_type_object($post_type);
 // All meta boxes should be defined and added before the first do_meta_boxes() call (or potentially during the do_meta_boxes action).
 require_once('./includes/meta-boxes.php');
 
+
+$publish_callback_args = null;
+if ( post_type_supports($post_type, 'revisions') && 'auto-draft' != $post->post_status ) {
+	$revisions = wp_get_post_revisions( $post_ID );
+
+	// Check if the revisions have been upgraded
+	if ( ! empty( $revisions ) && _wp_get_post_revision_version( end( $revisions ) ) < 1 )
+		_wp_upgrade_revisions_of_post( $post, $revisions );
+
+	// We should aim to show the revisions metabox only when there are revisions.
+	if ( count( $revisions ) > 1 ) {
+		reset( $revisions ); // Reset pointer for key()
+		$publish_callback_args = array( 'revisions_count' => count( $revisions ), 'revision_id' => key( $revisions ) );
+		add_meta_box('revisionsdiv', __('Revisions'), 'post_revisions_meta_box', null, 'normal', 'core');
+	}
+}
+
 if ( 'attachment' == $post_type ) {
 	wp_enqueue_script( 'image-edit' );
 	wp_enqueue_style( 'imgareaselect' );
 	add_meta_box( 'submitdiv', __('Save'), 'attachment_submit_meta_box', null, 'side', 'core' );
 	add_action( 'edit_form_after_title', 'edit_form_image_editor' );
 } else {
-	add_meta_box( 'submitdiv', __( 'Publish' ), 'post_submit_meta_box', null, 'side', 'core' );
+	add_meta_box( 'submitdiv', __( 'Publish' ), 'post_submit_meta_box', null, 'side', 'core', $publish_callback_args );
 }
+
+if ( current_theme_supports( 'post-formats' ) && post_type_supports( $post_type, 'post-formats' ) )
+	add_meta_box( 'formatdiv', _x( 'Format', 'post format' ), 'post_format_meta_box', null, 'side', 'core' );
 
 // all taxonomies
 foreach ( get_object_taxonomies( $post ) as $tax_name ) {
@@ -124,85 +150,6 @@ foreach ( get_object_taxonomies( $post ) as $tax_name ) {
 		add_meta_box('tagsdiv-' . $tax_name, $label, 'post_tags_meta_box', null, 'side', 'core', array( 'taxonomy' => $tax_name ));
 	else
 		add_meta_box($tax_name . 'div', $label, 'post_categories_meta_box', null, 'side', 'core', array( 'taxonomy' => $tax_name ));
-}
-
-// post format
-$format_class = '';
-$post_format_set_class = '';
-$post_format_options = '';
-if ( post_type_supports( $post_type, 'post-formats' ) && apply_filters( 'enable_post_format_ui', true, $post ) ) {
-	wp_enqueue_script( 'post-formats' );
-	wp_enqueue_script( 'wp-mediaelement' );
-	wp_enqueue_style( 'wp-mediaelement' );
-	$post_format = get_post_format();
-	$post_format_set_class = 'post-format-set';
-
-	if ( ! $post_format ) {
-		$post_format = 'standard';
-
-		if ( ! empty( $_REQUEST['format'] ) && in_array( $_REQUEST['format'], get_post_format_slugs() ) )
-			$post_format = $_REQUEST['format'];
-		elseif ( 'auto-draft' == $post->post_status )
-			$post_format_set_class = '';
-	}
-
-	$user_wants = get_user_option( 'post_formats_' . $post_type );
-	if ( false !== $user_wants ) {
-		// User wants what user gets.
-		$show_post_format_ui = (bool) $user_wants;
-	} else {
-		// UI is shown when the theme supports formats, or if the site has formats assigned to posts.
-		$show_post_format_ui = current_theme_supports( 'post-formats' ) || get_terms( 'post_format', array( 'number' => 1 ) );
-	}
-
-	$format_class = " class='wp-format-{$post_format}'";
-
-
-	$all_post_formats = array(
-		'standard' => array (
-			'description' => __( 'Use the editor below to compose your post.' )
-		),
-		'image' => array (
-			'description' => __( 'Select or upload an image for your post.' )
-		),
-		'gallery' => array (
-			'description' => __( 'Use the Add Media button to select or upload images for your gallery.' )
-		),
-		'link' => array (
-			'description' => __( 'Add a link URL below.' )
-		),
-		'video' => array (
-			'description' => __( 'Select or upload a video, or paste a video embed code into the box.' )
-		),
-		'audio' => array (
-			'description' => __( 'Select or upload an audio file, or paste an audio embed code into the box.' )
-		),
-		'chat' => array (
-			'description' => __( 'Copy a chat or Q&A transcript into the editor.' )
-		),
-		'status' => array (
-			'description' => __( 'Use the editor to compose a status update. What&#8217;s new?' )
-		),
-		'quote' => array (
-			'description' => __( 'Add a source and URL if you have them. Use the editor to compose the quote.' )
-		),
-		'aside' => array (
-			'description' => __( 'Use the editor to share a quick thought or side topic.' )
-		)
-	);
-
-	foreach ( $all_post_formats as $slug => $attr ) {
-		$class = '';
-		if ( $post_format == $slug ) {
-			$class = 'class="active"';
-			$active_post_type_slug = $slug;
-		}
-
-		$post_format_options .= '<a ' . $class . ' href="?format=' . $slug . '" data-description="' . $attr['description'] . '" data-wp-format="' . $slug . '" title="' . ucfirst( $slug ) . '"><div class="' . $slug . '"></div><span class="post-format-title">' . ucfirst( $slug ) . '</span></a>';
-	}
-
-	$current_post_format = array( 'currentPostFormat' => esc_html( $active_post_type_slug ) );
-	wp_localize_script( 'post-formats', 'postFormats', $current_post_format );
 }
 
 if ( post_type_supports($post_type, 'page-attributes') )
@@ -227,7 +174,7 @@ if ( post_type_supports($post_type, 'trackbacks') )
 if ( post_type_supports($post_type, 'custom-fields') )
 	add_meta_box('postcustom', __('Custom Fields'), 'post_custom_meta_box', null, 'normal', 'core');
 
-do_action('dbx_post_advanced');
+do_action('dbx_post_advanced', $post);
 if ( post_type_supports($post_type, 'comments') )
 	add_meta_box('commentstatusdiv', __('Discussion'), 'post_comment_status_meta_box', null, 'normal', 'core');
 
@@ -240,18 +187,6 @@ if ( ! ( 'pending' == get_post_status( $post ) && ! current_user_can( $post_type
 if ( post_type_supports($post_type, 'author') ) {
 	if ( is_super_admin() || current_user_can( $post_type_object->cap->edit_others_posts ) )
 		add_meta_box('authordiv', __('Author'), 'post_author_meta_box', null, 'normal', 'core');
-}
-
-if ( post_type_supports($post_type, 'revisions') && 'auto-draft' != $post->post_status ) {
-	$revisions = wp_get_post_revisions( $post_ID );
-
-	// Check if the revisions have been upgraded
-	if ( ! empty( $revisions ) && _wp_get_post_revision_version( end( $revisions ) ) < 1 )
-		_wp_upgrade_revisions_of_post( $post, $revisions );
-
-	// We should aim to show the revisions metabox only when there are revisions.
-	if ( count( $revisions ) > 1 )
-		add_meta_box('revisionsdiv', __('Revisions'), 'post_revisions_meta_box', null, 'normal', 'core');
 }
 
 do_action('add_meta_boxes', $post_type, $post);
@@ -375,7 +310,7 @@ if ( 'post' == $post_type ) {
 require_once('./admin-header.php');
 ?>
 
-<div class="wrap <?php echo $post_format_set_class; ?>">
+<div class="wrap">
 <?php screen_icon(); ?>
 <h2><?php
 echo esc_html( $title );
@@ -389,16 +324,12 @@ if ( isset( $post_new_file ) && current_user_can( $post_type_object->cap->create
 <div id="message" class="updated"><p><?php echo $message; ?></p></div>
 <?php endif; ?>
 <div id="lost-connection-notice" class="error hidden">
-	<p><?php _e("You have lost your connection with the server, and saving has been disabled. This message will vanish once you've reconnected."); ?></p>
+	<p><span class="spinner"></span> <?php _e( '<strong>Connection lost.</strong> Saving has been disabled until you&#8217;re reconnected.' ); ?>
+	<span class="hide-if-no-sessionstorage"><?php _e( 'We&#8217;re backing up this post in your browser, just in case.' ); ?></span>
+	</p>
 </div>
-<?php if ( ! empty( $post_format_options ) ) : ?>
-<div class="wp-post-format-ui<?php if ( ! $show_post_format_ui ) echo ' no-ui' ?>">
-	<div class="post-format-options">
-		<?php echo $post_format_options; ?>
-	</div>
-</div>
-<?php endif; ?>
-<form name="post" action="post.php" method="post" id="post"<?php do_action('post_edit_form_tag'); ?>>
+
+<form name="post" action="post.php" method="post" id="post"<?php do_action('post_edit_form_tag', $post); ?>>
 <?php wp_nonce_field($nonce_action); ?>
 <input type="hidden" id="user-id" name="user_ID" value="<?php echo (int) $user_ID ?>" />
 <input type="hidden" id="hiddenaction" name="action" value="<?php echo esc_attr( $form_action ) ?>" />
@@ -423,7 +354,8 @@ wp_nonce_field( 'closedpostboxes', 'closedpostboxesnonce', false );
 
 <div id="poststuff">
 <div id="post-body" class="metabox-holder columns-<?php echo 1 == get_current_screen()->get_columns() ? '1' : '2'; ?>">
-<div id="post-body-content"<?php echo $format_class; ?>>
+<div id="post-body-content">
+
 <?php if ( post_type_supports($post_type, 'title') ) { ?>
 <div id="titlediv">
 <div id="titlewrap">
@@ -457,15 +389,7 @@ wp_nonce_field( 'samplepermalink', 'samplepermalinknonce', false );
 <?php
 }
 
-if ( has_action( 'edit_form_after_title' ) ) {
-	echo '<div class="edit-form-section">';
-	do_action( 'edit_form_after_title' );
-	echo '</div>';
-}
-
-// post format fields
-if ( post_type_supports( $post_type, 'post-formats' ) && apply_filters( 'enable_post_format_ui', true, $post ) )
-	require_once( './includes/post-formats.php' );
+do_action( 'edit_form_after_title', $post );
 
 if ( post_type_supports($post_type, 'editor') ) {
 ?>
@@ -474,7 +398,7 @@ if ( post_type_supports($post_type, 'editor') ) {
 <?php wp_editor( $post->post_content, 'content', array(
 	'dfw' => true,
 	'tabfocus_elements' => 'insert-media-button,save-post',
-	'editor_height' => in_array( $post_format, array( 'status', 'aside' ) ) ? 120 : 360
+	'editor_height' => 360,
 ) ); ?>
 <table id="post-status-info" cellspacing="0"><tbody><tr>
 	<td id="wp-word-count"><?php printf( __( 'Word count: %s' ), '<span class="word-count">0</span>' ); ?></td>
@@ -497,11 +421,7 @@ if ( post_type_supports($post_type, 'editor') ) {
 </div>
 <?php }
 
-if ( has_action( 'edit_form_after_editor' ) ) {
-	echo '<div class="edit-form-section">';
-	do_action( 'edit_form_after_editor' );
-	echo '</div>';
-}
+do_action( 'edit_form_after_editor', $post );
 ?>
 </div><!-- /post-body-content -->
 
@@ -509,9 +429,9 @@ if ( has_action( 'edit_form_after_editor' ) ) {
 <?php
 
 if ( 'page' == $post_type )
-	do_action('submitpage_box');
+	do_action('submitpage_box', $post);
 else
-	do_action('submitpost_box');
+	do_action('submitpost_box', $post);
 
 do_meta_boxes($post_type, 'side', $post);
 
@@ -523,9 +443,9 @@ do_meta_boxes($post_type, 'side', $post);
 do_meta_boxes(null, 'normal', $post);
 
 if ( 'page' == $post_type )
-	do_action('edit_page_form');
+	do_action('edit_page_form', $post);
 else
-	do_action('edit_form_advanced');
+	do_action('edit_form_advanced', $post);
 
 do_meta_boxes(null, 'advanced', $post);
 
@@ -533,7 +453,7 @@ do_meta_boxes(null, 'advanced', $post);
 </div>
 <?php
 
-do_action('dbx_post_sidebar');
+do_action('dbx_post_sidebar', $post);
 
 ?>
 </div><!-- /post-body -->

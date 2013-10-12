@@ -80,7 +80,7 @@ function wpmu_delete_blog( $blog_id, $drop = false ) {
 		$drop = false;
 
 	if ( $drop ) {
-		$drop_tables = apply_filters( 'wpmu_drop_tables', $wpdb->tables( 'blog' ) );
+		$drop_tables = apply_filters( 'wpmu_drop_tables', $wpdb->tables( 'blog' ), $blog_id );
 
 		foreach ( (array) $drop_tables as $table ) {
 			$wpdb->query( "DROP TABLE IF EXISTS `$table`" );
@@ -371,7 +371,7 @@ function update_user_status( $id, $pref, $value, $deprecated = null ) {
 	if ( null !== $deprecated )
 		_deprecated_argument( __FUNCTION__, '3.1' );
 
-	$wpdb->update( $wpdb->users, array( $pref => $value ), array( 'ID' => $id ) );
+	$wpdb->update( $wpdb->users, array( sanitize_key( $pref ) => $value ), array( 'ID' => $id ) );
 
 	$user = new WP_User( $id );
 	clean_user_cache( $user );

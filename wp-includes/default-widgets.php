@@ -596,7 +596,7 @@ class WP_Widget_Recent_Posts extends WP_Widget {
 		$instance = $old_instance;
 		$instance['title'] = strip_tags($new_instance['title']);
 		$instance['number'] = (int) $new_instance['number'];
-		$instance['show_date'] = (bool) $new_instance['show_date'];
+		$instance['show_date'] = isset( $new_instance['show_date'] ) ? (bool) $new_instance['show_date'] : false;
 		$this->flush_widget_cache();
 
 		$alloptions = wp_cache_get( 'alloptions', 'options' );
@@ -866,18 +866,18 @@ function wp_widget_rss_output( $rss, $args = array() ) {
 			$title = __('Untitled');
 
 		$desc = str_replace( array("\n", "\r"), ' ', esc_attr( strip_tags( @html_entity_decode( $item->get_description(), ENT_QUOTES, get_option('blog_charset') ) ) ) );
-		$desc = wp_html_excerpt( $desc, 360 );
+		$excerpt = wp_html_excerpt( $desc, 360 );
 
 		// Append ellipsis. Change existing [...] to [&hellip;].
-		if ( '[...]' == substr( $desc, -5 ) )
-			$desc = substr( $desc, 0, -5 ) . '[&hellip;]';
-		elseif ( '[&hellip;]' != substr( $desc, -10 ) )
-			$desc .= ' [&hellip;]';
+		if ( '[...]' == substr( $excerpt, -5 ) )
+			$excerpt = substr( $excerpt, 0, -5 ) . '[&hellip;]';
+		elseif ( '[&hellip;]' != substr( $excerpt, -10 ) && $desc != $excerpt )
+			$excerpt .= ' [&hellip;]';
 
-		$desc = esc_html( $desc );
+		$excerpt = esc_html( $excerpt );
 
 		if ( $show_summary ) {
-			$summary = "<div class='rssSummary'>$desc</div>";
+			$summary = "<div class='rssSummary'>$excerpt</div>";
 		} else {
 			$summary = '';
 		}

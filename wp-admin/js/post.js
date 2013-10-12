@@ -252,9 +252,11 @@ WPRemoveThumbnail = function(nonce){
 };
 
 $(document).on( 'heartbeat-send.refresh-lock', function( e, data ) {
-	var lock = $('#active_post_lock').val(), post_id = $('#post_ID').val(), send = {};
+	var lock = $('#active_post_lock').val(),
+		post_id = $('#post_ID').val(),
+		send = {};
 
-	if ( !post_id )
+	if ( ! post_id || ! $('#post-lock-dialog').length )
 		return;
 
 	send['post_id'] = post_id;
@@ -274,7 +276,7 @@ $(document).on( 'heartbeat-tick.refresh-lock', function( e, data ) {
 
 		if ( received.lock_error ) {
 			// show "editing taken over" message
-			wrap = $('#notification-dialog-wrap');
+			wrap = $('#post-lock-dialog');
 
 			if ( wrap.length && ! wrap.is(':visible') ) {
 				if ( typeof autosave == 'function' ) {
@@ -286,7 +288,9 @@ $(document).on( 'heartbeat-tick.refresh-lock', function( e, data ) {
 					});
 
 					// Save the latest changes and disable
-					autosave();
+					if ( ! autosave() )
+						window.onbeforeunload = null;
+
 					autosave = function(){};
 				}
 
@@ -306,13 +310,53 @@ $(document).on( 'heartbeat-tick.refresh-lock', function( e, data ) {
 
 }(jQuery));
 
+(function($) {
+	var check, timeout;
+
+	function schedule() {
+		check = false;
+		window.clearTimeout( timeout );
+		timeout = window.setTimeout( function(){ check = true; }, 300000 );
+	}
+
+	$(document).on( 'heartbeat-send.wp-refresh-nonces', function( e, data ) {
+		var nonce, post_id;
+
+		if ( check ) {
+			if ( ( post_id = $('#post_ID').val() ) && ( nonce = $('#_wpnonce').val() ) ) {
+				data['wp-refresh-post-nonces'] = {
+					post_id: post_id,
+					post_nonce: nonce
+				};
+			}
+		}
+	}).on( 'heartbeat-tick.wp-refresh-nonces', function( e, data ) {
+		var nonces = data['wp-refresh-post-nonces'];
+
+		if ( nonces ) {
+			schedule();
+
+			if ( nonces.replace ) {
+				$.each( nonces.replace, function( selector, value ) {
+					$( '#' + selector ).val( value );
+				});
+			}
+
+			if ( nonces.heartbeatNonce )
+				window.heartbeatSettings.nonce = nonces.heartbeatNonce;
+		}
+	}).ready( function() {
+		schedule();
+	});
+}(jQuery));
+
 jQuery(document).ready( function($) {
 	var stamp, visibility, sticky = '', last = 0, co = $('#content');
 
 	postboxes.add_postbox_toggles(pagenow);
 
 	// Post locks: contain focus inside the dialog. If the dialog is shown, focus the first item.
-	$('#notification-dialog').on( 'keydown', function(e) {
+	$('#post-lock-dialog .notification-dialog').on( 'keydown', function(e) {
 		if ( e.which != 9 )
 			return;
 
@@ -371,8 +415,8 @@ jQuery(document).ready( function($) {
 
 		$('#new' + taxonomy).keypress( function(event){
 			if( 13 === event.keyCode ) {
-				 event.preventDefault();
-				 $('#' + taxonomy + '-add-submit').click();
+				event.preventDefault();
+				$('#' + taxonomy + '-add-submit').click();
 			}
 		});
 		$('#' + taxonomy + '-add-submit').click( function(){ $('#new' + taxonomy).focus(); });
@@ -409,7 +453,7 @@ jQuery(document).ready( function($) {
 			return false;
 		});
 
-		$('#' + taxonomy + 'checklist, #' + taxonomy + 'checklist-pop').on( 'click', 'input[type="checkbox"]', function() {
+		$('#' + taxonomy + 'checklist, #' + taxonomy + 'checklist-pop').on( 'click', 'li.popular-category > label input[type="checkbox"]', function() {
 			var t = $(this), c = t.is(':checked'), id = t.val();
 			if ( id && t.parents('#taxonomy-'+taxonomy).length )
 				$('#in-' + taxonomy + '-' + id + ', #in-popular-' + taxonomy + '-' + id).prop( 'checked', c );
@@ -857,6 +901,21 @@ jQuery(document).ready( function($) {
 					});
 				});
 			});
+		});
+
+		// When changing post formats, change the editor body class
+		$('#post-formats-select input.post-format').on( 'change.set-editor-class', function( event ) {
+			var editor, body, format = this.id;
+
+			if ( format && $( this ).prop('checked') ) {
+				editor = tinymce.get( 'content' );
+
+				if ( editor ) {
+					body = editor.getBody();
+					body.className = body.className.replace( /\bpost-format-[^ ]+/, '' );
+					editor.dom.addClass( body, format == 'post-format-0' ? 'post-format-standard' : format );
+				}
+			}
 		});
 	}
 });

@@ -14,7 +14,7 @@ class Walker_Nav_Menu_Edit extends Walker_Nav_Menu {
 	 *
 	 * @param string $output Passed by reference.
 	 */
-	function start_lvl(&$output) {}
+	function start_lvl( &$output, $depth = 0, $args = array() ) {}
 
 	/**
 	 * @see Walker_Nav_Menu::end_lvl()
@@ -22,8 +22,7 @@ class Walker_Nav_Menu_Edit extends Walker_Nav_Menu {
 	 *
 	 * @param string $output Passed by reference.
 	 */
-	function end_lvl(&$output) {
-	}
+	function end_lvl( &$output, $depth = 0, $args = array() ) {}
 
 	/**
 	 * @see Walker::start_el()
@@ -34,7 +33,7 @@ class Walker_Nav_Menu_Edit extends Walker_Nav_Menu {
 	 * @param int $depth Depth of menu item. Used for padding.
 	 * @param object $args
 	 */
-	function start_el(&$output, $item, $depth, $args) {
+	function start_el( &$output, $item, $depth = 0, $args = array(), $id = 0 ) {
 		global $_wp_nav_menu_max_depth;
 		$_wp_nav_menu_max_depth = $depth > $_wp_nav_menu_max_depth ? $depth : $_wp_nav_menu_max_depth;
 
@@ -79,7 +78,7 @@ class Walker_Nav_Menu_Edit extends Walker_Nav_Menu {
 			$title = sprintf( __('%s (Pending)'), $item->title );
 		}
 
-		$title = empty( $item->label ) ? $title : $item->label;
+		$title = ( ! isset( $item->label ) || '' == $item->label ) ? $title : $item->label;
 
 		$submenu_text = '';
 		if ( 0 == $depth )
@@ -173,7 +172,7 @@ class Walker_Nav_Menu_Edit extends Walker_Nav_Menu {
 					</label>
 				</p>
 
-				<p class="field-move description description-wide">
+				<p class="field-move hide-if-no-js description description-wide">
 					<label>
 						<span><?php _e( 'Move' ); ?></span>
 						<a href="#" class="menus-move-up"><?php _e( 'Up one' ); ?></a>
@@ -231,12 +230,12 @@ class Walker_Nav_Menu_Checklist extends Walker_Nav_Menu {
 		}
 	}
 
-	function start_lvl( &$output, $depth ) {
+	function start_lvl( &$output, $depth = 0, $args = array() ) {
 		$indent = str_repeat( "\t", $depth );
 		$output .= "\n$indent<ul class='children'>\n";
 	}
 
-	function end_lvl( &$output, $depth ) {
+	function end_lvl( &$output, $depth = 0, $args = array() ) {
 		$indent = str_repeat( "\t", $depth );
 		$output .= "\n$indent</ul>";
 	}
@@ -250,7 +249,7 @@ class Walker_Nav_Menu_Checklist extends Walker_Nav_Menu {
 	 * @param int $depth Depth of menu item. Used for padding.
 	 * @param object $args
 	 */
-	function start_el(&$output, $item, $depth, $args) {
+	function start_el( &$output, $item, $depth = 0, $args = array(), $id = 0 ) {
 		global $_nav_menu_placeholder;
 
 		$_nav_menu_placeholder = ( 0 > $_nav_menu_placeholder ) ? intval($_nav_menu_placeholder) - 1 : -1;
@@ -265,6 +264,8 @@ class Walker_Nav_Menu_Checklist extends Walker_Nav_Menu {
 		if ( property_exists( $item, 'front_or_home' ) && $item->front_or_home ) {
 			$title = sprintf( _x( 'Home: %s', 'nav menu front page title' ), $item->post_title );
 			$output .= ' add-to-top';
+		} elseif ( property_exists( $item, 'label' ) ) {
+			$title = $item->label;
 		}
 		$output .= '" name="menu-item[' . $possible_object_id . '][menu-item-object-id]" value="'. esc_attr( $item->object_id ) .'" /> ';
 		$output .= isset( $title ) ? esc_html( $title ) : esc_html( $item->title );
@@ -515,10 +516,7 @@ function wp_nav_menu_locations_meta_box() {
 					<option value="0"></option>
 					<?php foreach ( $menus as $menu ) : ?>
 					<option<?php selected( isset( $menu_locations[ $location ] ) && $menu_locations[ $location ] == $menu->term_id ); ?>
-						value="<?php echo $menu->term_id; ?>"><?php
-						$truncated_name = wp_html_excerpt( $menu->name, 40 );
-						echo $truncated_name == $menu->name ? $menu->name : trim( $truncated_name ) . '&hellip;';
-					?></option>
+						value="<?php echo $menu->term_id; ?>"><?php echo wp_html_excerpt( $menu->name, 40, '&hellip;' ); ?></option>
 					<?php endforeach; ?>
 				</select>
 			</label>
@@ -1131,7 +1129,7 @@ function wp_get_nav_menu_to_edit( $menu_id = 0 ) {
 		$menu_items = wp_get_nav_menu_items( $menu->term_id, array('post_status' => 'any') );
 		$result = '<div id="menu-instructions" class="post-body-plain';
 		$result .= ( ! empty($menu_items) ) ? ' menu-instructions-inactive">' : '">';
-		$result .= '<p>' . __( 'Next, add menu items (i.e. pages, links, categories) from the column on the left.' ) . '</p>';
+		$result .= '<p>' . __( 'Add menu items from the column on the left.' ) . '</p>';
 		$result .= '</div>';
 
 		if( empty($menu_items) )
@@ -1238,7 +1236,7 @@ function wp_nav_menu_update_menu_items ( $nav_menu_selected_id, $nav_menu_select
 		foreach( (array) $_POST['menu-item-db-id'] as $_key => $k ) {
 
 			// Menu item title can't be blank
-			if ( empty( $_POST['menu-item-title'][$_key] ) )
+			if ( ! isset( $_POST['menu-item-title'][ $_key ] ) || '' == $_POST['menu-item-title'][ $_key ] )
 				continue;
 
 			$args = array();

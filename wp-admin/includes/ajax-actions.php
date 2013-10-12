@@ -9,14 +9,20 @@
 /*
  * No-privilege Ajax handlers.
  */
+
+/**
+ * Heartbeat API (experimental)
+ *
+ * Runs when the user is not logged in.
+ */
 function wp_ajax_nopriv_heartbeat() {
 	$response = array();
 
 	// screen_id is the same as $current_screen->id and the JS global 'pagenow'
-	if ( ! empty($_POST['screenid']) )
-		$screen_id = sanitize_key($_POST['screenid']);
+	if ( ! empty($_POST['screen_id']) )
+		$screen_id = sanitize_key($_POST['screen_id']);
 	else
-		$screen_id = 'site';
+		$screen_id = 'front';
 
 	if ( ! empty($_POST['data']) ) {
 		$data = wp_unslash( (array) $_POST['data'] );
@@ -29,7 +35,7 @@ function wp_ajax_nopriv_heartbeat() {
 	do_action( 'heartbeat_nopriv_tick', $response, $screen_id );
 
 	// send the current time according to the server
-	$response['servertime'] = time();
+	$response['server_time'] = time();
 
 	wp_send_json($response);
 }
@@ -739,9 +745,9 @@ function wp_ajax_replyto_comment( $action ) {
 	$user = wp_get_current_user();
 	if ( $user->exists() ) {
 		$user_ID = $user->ID;
-		$comment_author       = $wpdb->escape($user->display_name);
-		$comment_author_email = $wpdb->escape($user->user_email);
-		$comment_author_url   = $wpdb->escape($user->user_url);
+		$comment_author       = wp_slash( $user->display_name );
+		$comment_author_email = wp_slash( $user->user_email );
+		$comment_author_url   = wp_slash( $user->user_url );
 		$comment_content      = trim($_POST['content']);
 		if ( current_user_can( 'unfiltered_html' ) ) {
 			if ( wp_create_nonce( 'unfiltered-html-comment' ) != $_POST['_wp_unfiltered_html_comment'] ) {
@@ -1038,7 +1044,7 @@ function wp_ajax_add_user( $action ) {
 function wp_ajax_autosave() {
 	define( 'DOING_AUTOSAVE', true );
 
-	$nonce_age = check_ajax_referer( 'autosave', 'autosavenonce' );
+	check_ajax_referer( 'autosave', 'autosavenonce' );
 
 	$_POST['post_category'] = explode(",", $_POST['catslist']);
 	if ( $_POST['post_type'] == 'page' || empty($_POST['post_category']) )
@@ -1075,8 +1081,6 @@ function wp_ajax_autosave() {
 				$id = $post->ID;
 		}
 
-		// When is_wp_error($id), $id overwrites $data in WP_Ajax_Response
-		// todo: Needs review. The errors generated in WP_Ajax_Response and parsed with wpAjax.parseAjaxResponse() haven't been used for years.
 		if ( ! is_wp_error($id) ) {
 			/* translators: draft saved date format, see http://php.net/date */
 			$draft_saved_date_format = __('g:i:s a');
@@ -1090,15 +1094,7 @@ function wp_ajax_autosave() {
 			$id = $post->ID;
 	}
 
-	if ( $nonce_age == 2 ) {
-		$supplemental['replace-autosavenonce'] = wp_create_nonce('autosave');
-		$supplemental['replace-getpermalinknonce'] = wp_create_nonce('getpermalink');
-		$supplemental['replace-samplepermalinknonce'] = wp_create_nonce('samplepermalink');
-		$supplemental['replace-closedpostboxesnonce'] = wp_create_nonce('closedpostboxes');
-		$supplemental['replace-_ajax_linking_nonce'] = wp_create_nonce( 'internal-linking' );
-		$supplemental['replace-_wpnonce'] = wp_create_nonce( 'update-post_' . $post->ID );
-	}
-
+	// @todo Consider exposing any errors, rather than having 'Saving draft...'
 	$x = new WP_Ajax_Response( array(
 		'what' => 'autosave',
 		'id' => $id,
@@ -1131,25 +1127,6 @@ function wp_ajax_closed_postboxes() {
 		$hidden = array_diff( $hidden, array('submitdiv', 'linksubmitdiv', 'manage-menu', 'create-menu') ); // postboxes that are always shown
 		update_user_option($user->ID, "metaboxhidden_$page", $hidden, true);
 	}
-
-	wp_die( 1 );
-}
-
-function wp_ajax_show_post_format_ui() {
-	error_log( serialize( $_REQUEST ) );
-
-	if ( empty( $_POST['post_type'] ) )
-		wp_die( 0 );
-
-	check_ajax_referer( 'show-post-format-ui_' . $_POST['post_type'], 'nonce' );
-
-	if ( ! $post_type_object = get_post_type_object( $_POST['post_type'] ) )
-		wp_die( 0 );
-
-	if ( ! current_user_can( $post_type_object->cap->edit_posts ) )
-		wp_die( -1 );
-
-	update_user_option( get_current_user_id(), 'post_formats_' . $post_type_object->name, empty( $_POST['show'] ) ? 0 : 1 );
 
 	wp_die( 1 );
 }
@@ -1352,6 +1329,12 @@ function wp_ajax_inline_save() {
 	if ( empty($data['ping_status']) )
 		$data['ping_status'] = 'closed';
 
+	// Hack: wp_unique_post_slug() doesn't work for drafts, so we will fake that our post is published.
+	if ( ! empty( $data['post_name'] ) && in_array( $post['post_status'], array( 'draft', 'pending' ) ) ) {
+		$post['post_status'] = 'publish';
+		$data['post_name'] = wp_unique_post_slug( $data['post_name'], $post['ID'], $post['post_status'], $post['post_type'], $post['post_parent'] );
+	}
+
 	// update the post
 	edit_post();
 
@@ -1415,7 +1398,7 @@ function wp_ajax_inline_save_tax() {
 		$parent = $parent_tag->parent;
 		$level++;
 	}
-	echo $wp_list_table->single_row( $tag, $level );
+	$wp_list_table->single_row( $tag, $level );
 	wp_die();
 }
 
@@ -2017,7 +2000,7 @@ function wp_ajax_send_attachment_to_editor() {
 		$html = '<a href="' . esc_url( $url ) . '"' . $rel . '>' . $html . '</a>';
 	}
 
-	remove_filter( 'media_send_to_editor', 'image_media_send_to_editor', 10, 3 );
+	remove_filter( 'media_send_to_editor', 'image_media_send_to_editor' );
 
 	if ( 'image' === substr( $post->post_mime_type, 0, 5 ) ) {
 		$align = isset( $attachment['align'] ) ? $attachment['align'] : 'none';
@@ -2075,24 +2058,31 @@ function wp_ajax_send_link_to_editor() {
 	wp_send_json_success( $html );
 }
 
+/**
+ * Heartbeat API (experimental)
+ *
+ * Runs when the user is logged in.
+ */
 function wp_ajax_heartbeat() {
-	check_ajax_referer( 'heartbeat-nonce', '_nonce' );
+	if ( empty( $_POST['_nonce'] ) )
+		wp_send_json_error();
+
 	$response = array();
 
+	if ( false === wp_verify_nonce( $_POST['_nonce'], 'heartbeat-nonce' ) ) {
+		// User is logged in but nonces have expired.
+		$response['nonces_expired'] = true;
+		wp_send_json($response);
+	}
+
 	// screen_id is the same as $current_screen->id and the JS global 'pagenow'
-	if ( ! empty($_POST['screenid']) )
-		$screen_id = sanitize_key($_POST['screenid']);
+	if ( ! empty($_POST['screen_id']) )
+		$screen_id = sanitize_key($_POST['screen_id']);
 	else
-		$screen_id = 'site';
+		$screen_id = 'front';
 
 	if ( ! empty($_POST['data']) ) {
 		$data = (array) $_POST['data'];
-		// todo: how much to sanitize and preset and what to leave to be accessed from $data or $_POST..?
-		$user = wp_get_current_user();
-		$data['user_id'] = $user->exists() ? $user->ID : 0;
-
-		// todo: separate filters: 'heartbeat_[action]' so we call different callbacks only when there is data for them,
-		// or all callbacks listen to one filter and run when there is something for them in $data?
 		$response = apply_filters( 'heartbeat_received', $response, $data, $screen_id );
 	}
 
@@ -2101,210 +2091,35 @@ function wp_ajax_heartbeat() {
 	// Allow the transport to be replaced with long-polling easily
 	do_action( 'heartbeat_tick', $response, $screen_id );
 
-	// send the current time acording to the server
-	$response['servertime'] = time();
+	// Send the current time according to the server
+	$response['server_time'] = time();
 
 	wp_send_json($response);
 }
 
-function wp_ajax_revisions_data() {
-	check_ajax_referer( 'revisions-ajax-nonce', 'nonce' );
+function wp_ajax_get_revision_diffs() {
+	require ABSPATH . 'wp-admin/includes/revision.php';
 
-	$compare_to = ! empty( $_GET['compare_to'] ) ? absint( $_GET['compare_to'] ) : 0;
-	$show_autosaves = ! empty( $_GET['show_autosaves'] );
-	$show_split_view = ! empty( $_GET['show_split_view'] );
-	$post_id = ! empty( $_GET['post_id'] ) ? absint( $_GET['post_id'] ) : 0;
-	$right_handle_at = ! empty( $_GET['right_handle_at'] ) ? (int) $_GET['right_handle_at'] : 0;
-	$left_handle_at = ! empty( $_GET['left_handle_at'] ) ? (int) $_GET['left_handle_at'] : 0;
-	$single_revision_id = ! empty( $_GET['single_revision_id'] ) ? absint( $_GET['single_revision_id'] ) : 0;
-	$compare_two_mode = (bool) $post_id;
+	if ( ! $post = get_post( (int) $_REQUEST['post_id'] ) )
+		wp_send_json_error();
 
-	//
-	//TODO: currently code returns all possible comparisons for the indicated 'compare_to' revision
-	//however, the front end prevents users from pulling the right handle past the left or the left pass the right,
-	//so only the possible diffs need be generated
-	//
-	$all_the_revisions = array();
-	if ( ! $post_id )
-		$post_id = $compare_to;
+	if ( ! current_user_can( 'read_post', $post->ID ) )
+		wp_send_json_error();
 
-	if ( ! current_user_can( 'read_post', $post_id ) )
-		continue;
+	// Really just pre-loading the cache here.
+	if ( ! $revisions = wp_get_post_revisions( $post->ID, array( 'check_enabled' => false ) ) )
+		wp_send_json_error();
 
-	if ( ! $revisions = wp_get_post_revisions( $post_id ) )
-		return;
+	$return = array();
+	@set_time_limit( 0 );
 
-	$left_revision = get_post( $compare_to );
+	foreach ( $_REQUEST['compare'] as $compare_key ) {
+		list( $compare_from, $compare_to ) = explode( ':', $compare_key ); // from:to
 
-	//single model fetch mode
-	//return the diff of a single revision comparison
-	if ( $single_revision_id ) {
-		$right_revision = get_post( $single_revision_id );
-
-		if ( ! $compare_to )
-			$left_revision = get_post( $post_id );
-
-		// make sure the right revision is the most recent
-		if ( $compare_two_mode && $right_revision->post_date < $left_revision->post_date ) {
-			$temp = $left_revision;
-			$left_revision = $right_revision;
-			$right_revision = $temp;
-		}
-
-		$lines_added = $lines_deleted = 0;
-		$content = '';
-		//compare from left to right, passed from application
-		foreach ( _wp_post_revision_fields() as $field => $field_value ) {
-			$left_content = apply_filters( "_wp_post_revision_field_$field", $left_revision->$field, $field, $left_revision, 'left' );
-			$right_content = apply_filters( "_wp_post_revision_field_$field", $right_revision->$field, $field, $right_revision, 'right' );
-
-			add_filter( "_wp_post_revision_field_$field", 'wp_kses_post' );
-
-			$args = array();
-
-			if ( $show_split_view )
-				 $args = array( 'show_split_view' => true );
-
-			// compare_to == 0 means first revision, so compare to a blank field to show whats changed
-			$diff = wp_text_diff_with_count( ( 0 == $compare_to ) ? '' : $left_content, $right_content, $args );
-
-			if ( isset( $diff[ 'html' ] ) ) {
-				$content .= sprintf( '<div class="diff-label">%s</div>', $field_value );
-				$content .= $diff[ 'html' ];
-			}
-
-			if ( isset( $diff[ 'lines_added' ] ) )
-				$lines_added = $lines_added + $diff[ 'lines_added' ];
-
-			if ( isset( $diff[ 'lines_deleted' ] ) )
-				$lines_deleted = $lines_deleted + $diff[ 'lines_deleted' ];
-		}
-		$content = '' == $content ? __( 'No difference' ) : $content;
-
-		$all_the_revisions = array (
-			'diff'          => $content,
-			'linesDeleted' => $lines_deleted,
-			'linesAdded'   => $lines_added
+		$return[] = array(
+			'id' => $compare_key,
+			'fields' => wp_get_revision_ui_diff( $post, $compare_from, $compare_to ),
 		);
-
-		echo json_encode( $all_the_revisions );
-		exit();
-	} //end single model fetch
-
-	$count = -1;
-
-	//reverse the list to start with oldes revision
-	$revisions = array_reverse( $revisions );
-
-	$previous_revision_id = 0;
-
-	/* translators: revision date format, see http://php.net/date */
-	$datef = _x( 'j F, Y @ G:i:s', 'revision date format');
-
-	foreach ( $revisions as $revision ) :
-		if ( ! $show_autosaves && wp_is_post_autosave( $revision ) )
-			continue;
-
-		$revision_from_date_author = '';
-		$is_current_revision = false;
-		$count++;
-		// return blank data for diffs to the left of the left handle (for right handel model)
-		// or to the right of the right handle (for left handel model)
-		if ( ( 0 != $left_handle_at && $count < $left_handle_at ) ||
-			 ( 0 != $right_handle_at && $count > ( $right_handle_at - 2 ) ) ) {
-			$all_the_revisions[] = array (
-				'ID' => $revision->ID,
-			);
-			continue;
-		}
-
-		if ( $compare_two_mode ) {
-			$compare_to_gravatar = get_avatar( $left_revision->post_author, 24 );
-			$compare_to_author = get_the_author_meta( 'display_name', $left_revision->post_author );
-			$compare_to_date = date_i18n( $datef, strtotime( $left_revision->post_modified ) );
-
-			$revision_from_date_author = sprintf(
-				/* translators: post revision title: 1: author avatar, 2: author name, 3: time ago, 4: date */
-				_x( '%1$s %2$s, %3$s ago (%4$s)', 'post revision title' ),
-				$compare_to_gravatar,
-				$compare_to_author,
-				human_time_diff( strtotime( $left_revision->post_modified ), current_time( 'timestamp' ) ),
-				$compare_to_date
-			);
-		}
-
-		$gravatar = get_avatar( $revision->post_author, 24 );
-		$author = get_the_author_meta( 'display_name', $revision->post_author );
-		$date = date_i18n( $datef, strtotime( $revision->post_modified ) );
-		$revision_date_author = sprintf(
-			/* translators: post revision title: 1: author avatar, 2: author name, 3: time ago, 4: date */
-			_x( '%1$s %2$s, %3$s ago (%4$s)', 'post revision title' ),
-			$gravatar,
-			$author,
-			human_time_diff( strtotime( $revision->post_modified ), current_time( 'timestamp' ) ),
-			$date
-		);
-
-		$autosavef = _x( '%1$s [Autosave]', 'post revision title extra' );
-		$currentf  = _x( '%1$s [Current Revision]', 'post revision title extra' );
-
-		if ( ! $post = get_post( $post_id ) )
-			continue;
-
-		if ( $left_revision->post_modified === $post->post_modified )
-			$revision_from_date_author = sprintf( $currentf, $revision_from_date_author );
-		elseif ( wp_is_post_autosave( $left_revision ) )
-			$revision_from_date_author = sprintf( $autosavef, $revision_from_date_author );
-
-		if ( $revision->post_modified === $post->post_modified ) {
-			$revision_date_author = sprintf( $currentf, $revision_date_author );
-			$is_current_revision = true;
-		} elseif ( wp_is_post_autosave( $revision ) ) {
-			$revision_date_author = sprintf( $autosavef, $revision_date_author );
-		}
-
-		/* translators: revision date short format, see http://php.net/date */
-		$date_short_format = _x( 'j M @ G:i', 'revision date short format');
-		$date_short = date_i18n( $date_short_format, strtotime( $revision->post_modified ) );
-
-		$revision_date_author_short = sprintf(
-			'%s <strong>%s</strong><br />%s',
-			$gravatar,
-			$author,
-			$date_short
-		);
-
-		$restore_link = wp_nonce_url(
-			add_query_arg(
-				array( 'revision' => $revision->ID,
-					'action' => 'restore' ),
-					admin_url( 'revision.php' )
-			),
-			"restore-post_{$revision->ID}"
-		);
-
-		// if this is a left handled calculation swap data
-		if ( 0 != $right_handle_at ) {
-			$tmp = $revision_from_date_author;
-			$revision_from_date_author = $revision_date_author;
-			$revision_date_author = $tmp;
-		}
-
-		if ( ( $compare_two_mode || -1 !== $previous_revision_id ) ) {
-			$all_the_revisions[] = array (
-				'ID'           => $revision->ID,
-				'titleTo'      => $revision_date_author,
-				'titleFrom'    => $revision_from_date_author,
-				'titleTooltip' => $revision_date_author_short,
-				'restoreLink'  => urldecode( $restore_link ),
-				'previousID'   => $previous_revision_id,
-				'isCurrent'    => $is_current_revision,
-			);
-		}
-		$previous_revision_id = $revision->ID;
-
-	endforeach;
-
-	echo json_encode( $all_the_revisions );
-	exit();
+	}
+	wp_send_json_success( $return );
 }

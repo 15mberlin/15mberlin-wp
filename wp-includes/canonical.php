@@ -18,7 +18,7 @@
  * one or the other.
  *
  * Prevents redirection for feeds, trackbacks, searches, comment popup, and
- * admin URLs. Does not redirect on non-pretty-permalink-supporting IIS 7,
+ * admin URLs. Does not redirect on non-pretty-permalink-supporting IIS 7+,
  * page/post previews, WP admin, Trackbacks, robots.txt, searches, or on POST
  * requests.
  *
@@ -337,7 +337,7 @@ function redirect_canonical( $requested_url = null, $do_redirect = true ) {
 		$redirect['query'] = trim(preg_replace( '#(^|&)(p|page_id|cat|tag)=?(&|$)#', '&', $redirect['query']), '&');
 
 		// Redirect obsolete feeds
-		$redirect['query'] = preg_replace( '#(^|&)feed=rss(&|$)#', '$1feed=rss2$3', $redirect['query'] );
+		$redirect['query'] = preg_replace( '#(^|&)feed=rss(&|$)#', '$1feed=rss2$2', $redirect['query'] );
 
 		// Remove redundant leading ampersands
 		$redirect['query'] = preg_replace( '#^\??&*?#', '', $redirect['query'] );

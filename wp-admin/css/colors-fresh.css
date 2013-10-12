@@ -164,6 +164,7 @@ textarea.disabled {
 	color: #fff;
 }
 
+.revisions-meta,
 .widget .widget-top,
 .postbox h3,
 .stuffbox h3,
@@ -1351,10 +1352,15 @@ div.wp-menu-image {
 
 /* end screen icons */
 
+/* Post format icons */
+
+.post-format-icon {
+	background: url(../images/post-formats.png) no-repeat;
+}
+
 /* Diff */
 table.diff .diff-deletedline {
-	background-color: #fdd;
-	text-decoration: line-through;
+	background-color: #ffe9e9;
 }
 
 table.diff .diff-deletedline del {
@@ -1362,72 +1368,62 @@ table.diff .diff-deletedline del {
 }
 
 table.diff .diff-addedline {
-	background-color: #dfd;
+	background-color: #e9ffe9;
 }
 
 table.diff .diff-addedline ins {
 	background-color: #afa;
 }
 
-#diff-title-to strong {
-	color: #0080aa;
+.revisions-meta {
+	border: 1px solid #dfdfdf;
 }
 
-.diff-header {
-	background-color: #f7f7f7;
+.revisions-controls {
+	background: #fff;
+	background: -webkit-gradient(linear, left bottom, left top, color-stop(0%,rgba(255,255,255,1)), color-stop(30px,rgba(255,255,255,1)), color-stop(100%,rgba(255,255,255,1)));
+	background: -webkit-linear-gradient(bottom, rgba(255,255,255,0) 0%, rgba(255,255,255,1) 30px, rgba(255,255,255,1) 100%);
+	background:    -moz-linear-gradient(bottom, rgba(255,255,255,0) 0%,rgba(255,255,255,1) 30px, rgba(255,255,255,1) 100%);
+	background:      -o-linear-gradient(bottom, rgba(255,255,255,0) 0%, rgba(255,255,255,1) 30px, rgba(255,255,255,1) 100%);
+	background: linear-gradient(to top, rgba(255,255,255,0) 0%, rgba(255,255,255,1) 30px, rgba(255,255,255,1) 100%);
 }
 
-.revision-tick.completed-false {
-	background-color: #99c;
-	background: url(../images/wpspin_light.gif) no-repeat;
-	background-position: middle;
-	background-size: 1px 10px;
-}
-
-.revision-tick.completed-true {
-	background-color: #d7d7d7;
-}
-
-.diff-label {
-	color: #666;
-}
-
-body .ui-tooltip {
+.revisions-tooltip,
+.revisions-tooltip-arrow span {
 	border-color: #d7d7d7;
 	background-color: #fff;
+}
+
+.revisions-tickmarks > div {
+	border-color: #aaa;
 }
 
 /* jQuery UI Slider */
 .wp-slider.ui-slider {
 	border-color: #d7d7d7;
-	background: #f7f7f7;
 }
 
 .wp-slider .ui-slider-handle {
-	border-color: none;
+	border-color: #ccc;
+	border-radius: 50%;
+	background: #f4f4f4;
+	background-image: -webkit-gradient(linear, left bottom, left top, from(#dfdfdf), to(#fff));
+	background-image: -webkit-linear-gradient(bottom, #dfdfdf, #fff);
+	background-image:    -moz-linear-gradient(bottom, #dfdfdf, #fff);
+	background-image:      -o-linear-gradient(bottom, #dfdfdf, #fff);
+	background-image: linear-gradient(to top, #dfdfdf, #fff);
+	color: #333;
 }
 
-.wp-slider .ui-slider-handle.left-handle {
-background-image: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABEAAAARCAMAAAAMs7fIAAAAA3NCSVQICAjb4U/gAAABAlBMVEXR2uHM1dzCzNW4ydOzxtSxw9Gqwc+bs7+Ss8SVscaZrLqQq7yNrMCKqr+EqsGDqb6GpruCpbl8pL15o7t1n7hwnLVika1djq5giqJXiqlYiqNJgp9ieYlDfqA/epw3dpk7dpg2dpo3dZo6dZc4dJY4dJg3cZY2bpE1bosxaIYxZIMrYX0tXnwtXHYsWHEnVW0mTmglT2cjTGIhRVsfQlYaN0kYM0QULDgTKTYRJzQTJzINISoLHCYNGyYKGCEIFxwJEhcJEhsHEhQDDAkHCg8EBwwCBwoEBAQBAwIBAQEBAQMAAgEBAAAAAAQAAQMBAAIAAAICAAEBAQAAAQAAAAD///+62qV+AAAAVnRSTlP/////////////////////////////////////////////////////////////////////////////////////////////////////////////////AEpNbNkAAAAJcEhZcwAACusAAArrAYKLDVoAAAAUdEVYdENyZWF0aW9uIFRpbWUAMy85LzEzrdD8jAAAABx0RVh0U29mdHdhcmUAQWRvYmUgRmlyZXdvcmtzIENTNui8sowAAACbSURBVBiVVcvVDoNQEEXRqbu781B3d/dQQknh/P+vtBQKt/tpsnKGEOW4klkQFFvIsqwYzUJUvCts1wJl9gIruxT5hpLEyMBLKG+Z0ToJgrPLTDqOjyCxNN7mcahiaz50uDWsX0Fk+tKahKGJpX55qp1qpAsCY0lt5MdPUD2KoniowBRXn+f5Xp4RZDfCKg1W0D637P/iznn06w0M+083NZW9ZwAAAABJRU5ErkJggg==);
-}
-
-.wp-slider .ui-slider-handle.ui-state-active.left-handle {
-background-image: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABEAAAARCAMAAAAMs7fIAAAAA3NCSVQICAjb4U/gAAAAzFBMVEXZ5ejU4eXM3ODG2NzE1tvB1Nq90deux86sxs2qxcynwsqlwcmjwMihvseevMWdvMSbusOXuMGTtb6IrbiHrLeCqbSBqLN/p7J3oa11oKxzn6tvnKhrmaZqmKVpmKVol6RllaJhk6Bej51djptaiZZZiJVYhpNWg5BUf4xSfYlRfIhPeYRMdYBKcXxFaXNDZnA+X2g9XmY8XGU4VV43VFw2U1s0UFgyTVQxS1IwSVAuR00sREosQ0orQkgqQEYpPkQoPkMoPUMoPUL///8pY4MvAAAARHRSTlP/////////////////////////////////////////////////////////////////////////////////////////AHHSjxIAAAAJcEhZcwAACusAAArrAYKLDVoAAAAUdEVYdENyZWF0aW9uIFRpbWUAMy85LzEzrdD8jAAAABx0RVh0U29mdHdhcmUAQWRvYmUgRmlyZXdvcmtzIENTNui8sowAAACUSURBVBiVVctXEoJQEETRMaIo5qwF5hwxYOY9ev97EiQ43q+pUz2EYk9n5UElU0rpRO016toO79WhxlVysWqkroRgsswSjAsbnasgpGdsMk25gooZvR3K8CQxCuU9jH8FhZ3022rwJTZ4CK9nnwJBbiO8yVpFKDButm1bOn6iLFyZt5igeZLHOrhgfJ8k/yXTVoLrAxo1P5iCdUg7AAAAAElFTkSuQmCC);
-}
-
-.wp-slider .ui-slider-handle {
-	/* Slider drag Triangle CSS */
-background-image: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABEAAAARCAMAAAAMs7fIAAAAA3NCSVQICAjb4U/gAAAA8FBMVEU2dZipwNBJl8VGmcX///+EpLlBgqpymrNFjru3ydNWiKs6eZzY4uuRrL08faPL3OZBjLSBqsCTssRHlMJEf59cj657o7xKl8OEqsE9gag2dJtEkb+ct8iZs8BHmMePq8BejKZAiK5llK5FjrlJl8c6dZdGl8avxdBJlcZ4nbc6ep6XrbpKgZ+Lqr5KmcdIkbqsws1Gk8E+f6c4dptaiadFirRKl8V8pblImcNIl8eGpruVscZCh7BMlsdIlcFImchEkbs9eJpCjbdGjbk8fJ84dp02dpo8gatMlsM2dps8faVAg61Ej71Ek75IksFIlcOaLCw7AAAAUHRSTlP/////AP///////////////////////////////////////////////////////////////////////////////////////////////////xB6m5UAAAAJcEhZcwAACxIAAAsSAdLdfvwAAAAUdEVYdENyZWF0aW9uIFRpbWUAMy85LzEzrdD8jAAAABx0RVh0U29mdHdhcmUAQWRvYmUgRmlyZXdvcmtzIENTNui8sowAAACaSURBVBiVVcxZD8FAGIXhjxzUVktQgqKmo7ZYhkgsiS1tQuj//zeomo736uS5OFSo2W6UXc/R5hxXW5foxDlXqUKZx0GFZpXynuM4kXhjgjgyJkGzQIjpvi9Fx1uQ0iQUh4GkR/Ini0CQ2IfQ24YC4X8T+Mn0zj8lO1IgnqZpzlxE0m4YhrFsKYJVn126UGV+W1wHf4LdpByuF0goFKI7tv/dAAAAAElFTkSuQmCC);
+.wp-slider .ui-slider-handle:hover,
+.wp-slider .ui-slider-handle:focus {
+	border-color: #aaa;
 }
 
 .wp-slider .ui-slider-handle.ui-state-hover,
 .wp-slider .ui-slider-handle.ui-state-focus {
-	border-color: none;
+	border-color: #aaa;
 	outline: none;
-}
-
-.wp-slider .ui-slider-handle.ui-state-active {
-	background-image: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABEAAAARCAMAAAAMs7fIAAAAA3NCSVQICAjb4U/gAAAA51BMVEUgZpDkzc0yd6f///8mcqFJm8cjbZZzr80mg78lh8BDk8UngLl+s9AmfKk4hrGeweBaoMhNlMORwt4nd6Zdm8BAjMEnf7RYmsMkb50mhsFWlsYhZ5ImhbwocZg0f61Lk8E9i7twqNBgo8VSmMUofLBcm8o3faUpfK8mh8Aia5MgZpFMmcgpeapDmcJjo8sliMEmh70nhLkkcKAqgLF2sc8sc5ojbZsngrMkh8EnfKw1eaUjbpkkapImeKQgaJAohb0mh8MmhcMng7kkcKEpf68iZ48haJMmhb8kicEmc6MibJkia5UnhLsw1mWvAAAATXRSTlP/AP8A/////////////////////////////////////////////////////////////////////////////////////////////////9/iR18AAAAJcEhZcwAACxIAAAsSAdLdfvwAAAAUdEVYdENyZWF0aW9uIFRpbWUAMy85LzEzrdD8jAAAABx0RVh0U29mdHdhcmUAQWRvYmUgRmlyZXdvcmtzIENTNui8sowAAACaSURBVBiVVc15D8FAEIfh+Ymj6761LIrSiCNVVyjbRGgifP/PQ6q22/evyZPJDNXzD6G0qNDq5PtO3DJDFyfRpk+po2Eo0h5Qx9U0LRa3SejdlR2rDMLI41yKh6/AtOSzUiuU4kvemSMUDBsRXGuRIHj/CvCXyTNcSXelQBQYY1uBWMY651xfK4KzbdgzqJI73LK7hGC6r0bTB5apIhqIH/YIAAAAAElFTkSuQmCC);
 }
 
 /* edit image */
@@ -2141,6 +2137,12 @@ h2.nav-tab-wrapper, h3.nav-tab-wrapper {
 	#header-logo {
 		background-image: url('../images/wp-logo-2x.png?ver=20120916');
 		background-size: 16px auto;
+	}
+
+	/* 16px post formats */
+	.post-format-icon {
+		background-image: url(../images/post-formats32.png);
+		background-size: 16px 304px;
 	}
 
 }

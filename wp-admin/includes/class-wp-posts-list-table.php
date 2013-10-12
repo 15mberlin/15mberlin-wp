@@ -382,8 +382,10 @@ class WP_Posts_List_Table extends WP_List_Table {
 			if ( $count >= $end )
 				break;
 
-			if ( $count >= $start )
-				echo "\t" . $this->single_row( $page, $level );
+			if ( $count >= $start ) {
+				echo "\t";
+				$this->single_row( $page, $level );
+			}
 
 			$count++;
 
@@ -397,8 +399,12 @@ class WP_Posts_List_Table extends WP_List_Table {
 				foreach ( $orphans as $op ) {
 					if ( $count >= $end )
 						break;
-					if ( $count >= $start )
-						echo "\t" . $this->single_row( $op, 0 );
+
+					if ( $count >= $start ) {
+						echo "\t";
+						$this->single_row( $op, 0 );
+					}
+
 					$count++;
 				}
 			}
@@ -444,13 +450,16 @@ class WP_Posts_List_Table extends WP_List_Table {
 				}
 				$num_parents = count( $my_parents );
 				while ( $my_parent = array_pop( $my_parents ) ) {
-					echo "\t" . $this->single_row( $my_parent, $level - $num_parents );
+					echo "\t";
+					$this->single_row( $my_parent, $level - $num_parents );
 					$num_parents--;
 				}
 			}
 
-			if ( $count >= $start )
-				echo "\t" . $this->single_row( $page, $level );
+			if ( $count >= $start ) {
+				echo "\t";
+				$this->single_row( $page, $level );
+			}
 
 			$count++;
 
@@ -471,7 +480,7 @@ class WP_Posts_List_Table extends WP_List_Table {
 		$edit_link = get_edit_post_link( $post->ID );
 		$title = _draft_or_post_title();
 		$post_type_object = get_post_type_object( $post->post_type );
-		$can_edit_post = current_user_can( $post_type_object->cap->edit_post, $post->ID );
+		$can_edit_post = current_user_can( 'edit_post', $post->ID );
 
 		$alternate = 'alternate' == $alternate ? '' : 'alternate';
 		$classes = $alternate . ' iedit author-' . ( get_current_user_id() == $post->post_author ? 'self' : 'other' );
@@ -542,7 +551,7 @@ class WP_Posts_List_Table extends WP_List_Table {
 				if ( $format = get_post_format( $post->ID ) ) {
 					$label = get_post_format_string( $format );
 
-					echo '<a href="' . esc_url( add_query_arg( array( 'post_format' => $format, 'post_type' => $post->post_type ), 'edit.php' ) ) . '" class="post-state-format format-' . $format . '" title="' . $label . '">' . $label . ":</a> ";
+					echo '<a href="' . esc_url( add_query_arg( array( 'post_format' => $format, 'post_type' => $post->post_type ), 'edit.php' ) ) . '" class="post-state-format post-format-icon post-format-' . $format . '" title="' . $label . '">' . $label . ":</a> ";
 				}
 
 				if ( $can_edit_post && $post->post_status != 'trash' ) {
@@ -565,7 +574,7 @@ class WP_Posts_List_Table extends WP_List_Table {
 						$locked_avatar = $locked_text = '';
 					}
 
-					echo '<span class="locked-avatar">' . $locked_avatar . '</span> <span class="locked-text">' . $locked_text . "</span>\n";
+					echo '<div class="locked-info"><span class="locked-avatar">' . $locked_avatar . '</span> <span class="locked-text">' . $locked_text . "</span></div>\n";
 				}
 
 				if ( ! $this->hierarchical_display && 'excerpt' == $mode && current_user_can( 'read_post', $post->ID ) )
@@ -576,7 +585,7 @@ class WP_Posts_List_Table extends WP_List_Table {
 					$actions['edit'] = '<a href="' . get_edit_post_link( $post->ID, true ) . '" title="' . esc_attr( __( 'Edit this item' ) ) . '">' . __( 'Edit' ) . '</a>';
 					$actions['inline hide-if-no-js'] = '<a href="#" class="editinline" title="' . esc_attr( __( 'Edit this item inline' ) ) . '">' . __( 'Quick&nbsp;Edit' ) . '</a>';
 				}
-				if ( current_user_can( $post_type_object->cap->delete_post, $post->ID ) ) {
+				if ( current_user_can( 'delete_post', $post->ID ) ) {
 					if ( 'trash' == $post->post_status )
 						$actions['untrash'] = "<a title='" . esc_attr( __( 'Restore this item from the Trash' ) ) . "' href='" . wp_nonce_url( admin_url( sprintf( $post_type_object->_edit_link . '&amp;action=untrash', $post->ID ) ), 'untrash-post_' . $post->ID ) . "'>" . __( 'Restore' ) . "</a>";
 					elseif ( EMPTY_TRASH_DAYS )
@@ -587,7 +596,7 @@ class WP_Posts_List_Table extends WP_List_Table {
 				if ( $post_type_object->public ) {
 					if ( in_array( $post->post_status, array( 'pending', 'draft', 'future' ) ) ) {
 						if ( $can_edit_post )
-							$actions['view'] = '<a href="' . esc_url( apply_filters( 'preview_post_link', add_query_arg( 'preview', 'true', get_permalink( $post->ID ) ) ) ) . '" title="' . esc_attr( sprintf( __( 'Preview &#8220;%s&#8221;' ), $title ) ) . '" rel="permalink">' . __( 'Preview' ) . '</a>';
+							$actions['view'] = '<a href="' . esc_url( apply_filters( 'preview_post_link', set_url_scheme( add_query_arg( 'preview', 'true', get_permalink( $post->ID ) ) ) ) ) . '" title="' . esc_attr( sprintf( __( 'Preview &#8220;%s&#8221;' ), $title ) ) . '" rel="permalink">' . __( 'Preview' ) . '</a>';
 					} elseif ( 'trash' != $post->post_status ) {
 						$actions['view'] = '<a href="' . get_permalink( $post->ID ) . '" title="' . esc_attr( sprintf( __( 'View &#8220;%s&#8221;' ), $title ) ) . '" rel="permalink">' . __( 'View' ) . '</a>';
 					}
@@ -1037,12 +1046,11 @@ class WP_Posts_List_Table extends WP_List_Table {
 		}
 	?>
 		<p class="submit inline-edit-save">
-			<a accesskey="c" href="#inline-edit" title="<?php esc_attr_e( 'Cancel' ); ?>" class="button-secondary cancel alignleft"><?php _e( 'Cancel' ); ?></a>
+			<a accesskey="c" href="#inline-edit" class="button-secondary cancel alignleft"><?php _e( 'Cancel' ); ?></a>
 			<?php if ( ! $bulk ) {
 				wp_nonce_field( 'inlineeditnonce', '_inline_edit', false );
-				$update_text = __( 'Update' );
 				?>
-				<a accesskey="s" href="#inline-edit" title="<?php esc_attr_e( 'Update' ); ?>" class="button-primary save alignright"><?php echo esc_attr( $update_text ); ?></a>
+				<a accesskey="s" href="#inline-edit" class="button-primary save alignright"><?php _e( 'Update' ); ?></a>
 				<span class="spinner"></span>
 			<?php } else {
 				submit_button( __( 'Update' ), 'button-primary alignright', 'bulk_edit', false, array( 'accesskey' => 's' ) );

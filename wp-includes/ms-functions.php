@@ -378,7 +378,10 @@ function is_email_address_unsafe( $user_email ) {
 	$is_email_address_unsafe = false;
 
 	if ( $banned_names && is_array( $banned_names ) ) {
-		list( $email_local_part, $email_domain ) = explode( '@', $user_email );
+		$banned_names = array_map( 'strtolower', $banned_names );
+		$normalized_email = strtolower( $user_email );
+
+		list( $email_local_part, $email_domain ) = explode( '@', $normalized_email );
 
 		foreach ( $banned_names as $banned_domain ) {
 			if ( ! $banned_domain )
@@ -390,7 +393,7 @@ function is_email_address_unsafe( $user_email ) {
 			}
 
 			$dotted_domain = ".$banned_domain";
-			if ( $dotted_domain === substr( $user_email, -strlen( $dotted_domain ) ) ) {
+			if ( $dotted_domain === substr( $normalized_email, -strlen( $dotted_domain ) ) ) {
 				$is_email_address_unsafe = true;
 				break;
 			}
@@ -460,9 +463,7 @@ function wpmu_validate_user_signup($user_name, $user_email) {
 		$errors->add( 'user_name', __( 'Sorry, usernames may not contain the character &#8220;_&#8221;!' ) );
 
 	// all numeric?
-	$match = array();
-	preg_match( '/[0-9]*/', $user_name, $match );
-	if ( $match[0] == $user_name )
+	if ( preg_match( '/^[0-9]*$/', $user_name ) )
 		$errors->add('user_name', __('Sorry, usernames must have letters too!'));
 
 	if ( !is_email( $user_email ) )
@@ -564,7 +565,7 @@ function wpmu_validate_blog_signup($blogname, $blog_title, $user = '') {
 	if ( strlen( $blogname ) < 4 && !is_super_admin() )
 		$errors->add('blogname',  __( 'Site name must be at least 4 characters.' ) );
 
-	if ( strpos( ' ' . $blogname, '_' ) != false )
+	if ( strpos( $blogname, '_' ) !== false )
 		$errors->add( 'blogname', __( 'Sorry, site names may not contain the character &#8220;_&#8221;!' ) );
 
 	// do not allow users to create a blog that conflicts with a page on the main blog.
@@ -572,9 +573,7 @@ function wpmu_validate_blog_signup($blogname, $blog_title, $user = '') {
 		$errors->add( 'blogname', __( 'Sorry, you may not use that site name.' ) );
 
 	// all numeric?
-	$match = array();
-	preg_match( '/[0-9]*/', $blogname, $match );
-	if ( $match[0] == $blogname )
+	if ( preg_match( '/^[0-9]*$/', $blogname ) )
 		$errors->add('blogname', __('Sorry, site names must have letters too!'));
 
 	$blogname = apply_filters( 'newblogname', $blogname );
@@ -902,10 +901,8 @@ function wpmu_create_user( $user_name, $password, $email ) {
 	if ( is_wp_error( $user_id ) )
 		return false;
 
-	$user = new WP_User( $user_id );
-
 	// Newly created users have no roles or caps until they are added to a blog.
-	delete_user_option( $user_id, $user->cap_key );
+	delete_user_option( $user_id, 'capabilities' );
 	delete_user_option( $user_id, 'user_level' );
 
 	do_action( 'wpmu_new_user', $user_id );

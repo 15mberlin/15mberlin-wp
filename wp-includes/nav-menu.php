@@ -336,13 +336,12 @@ function wp_update_nav_menu_item( $menu_id = 0, $menu_item_db_id = 0, $menu_item
 			$original_title = $original_object->post_title;
 		}
 
-		if ( empty( $args['menu-item-title'] ) || $args['menu-item-title'] == $original_title ) {
+		if ( $args['menu-item-title'] == $original_title )
 			$args['menu-item-title'] = '';
 
-			// hack to get wp to create a post object when too many properties are empty
-			if ( empty( $args['menu-item-description'] ) )
-				$args['menu-item-description'] = ' ';
-		}
+		// hack to get wp to create a post object when too many properties are empty
+		if ( '' ==  $args['menu-item-title'] && '' == $args['menu-item-description'] )
+			$args['menu-item-description'] = ' ';
 	}
 
 	// Populate the menu item object
@@ -641,6 +640,9 @@ function wp_setup_nav_menu_item( $menu_item ) {
 			$object = get_post_type_object( $menu_item->post_type );
 			$menu_item->object = $object->name;
 			$menu_item->type_label = $object->labels->singular_name;
+
+			if ( '' === $menu_item->post_title )
+				$menu_item->post_title = sprintf( __( '#%d (no title)' ), $menu_item->ID );
 
 			$menu_item->title = $menu_item->post_title;
 			$menu_item->url = get_permalink( $menu_item->ID );

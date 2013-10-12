@@ -1,284 +1,471 @@
 window.wp = window.wp || {};
 
 (function($) {
-	var Revision, Revisions, Diff, l10n, revisions;
+	var revisions;
 
-	revisions = wp.revisions = function() {
-		Diff = revisions.Diff = new Diff();
+	revisions = wp.revisions = { model: {}, view: {}, controller: {} };
+
+	// Link settings.
+	revisions.settings = _.isUndefined( _wpRevisionsSettings ) ? {} : _wpRevisionsSettings;
+
+	// For debugging
+	revisions.debug = false;
+
+	revisions.log = function() {
+		if ( window.console && revisions.debug )
+			console.log.apply( console, arguments );
 	};
 
-	_.extend( revisions, { model: {}, view: {}, controller: {} } );
+	// Handy functions to help with positioning
+	$.fn.allOffsets = function() {
+		var offset = this.offset() || {top: 0, left: 0}, win = $(window);
+		return _.extend( offset, {
+			right:  win.width()  - offset.left - this.outerWidth(),
+			bottom: win.height() - offset.top  - this.outerHeight()
+		});
+	};
 
-	// Link any localized strings.
-	l10n = revisions.model.l10n = typeof wpRevisionsL10n === 'undefined' ? {} : wpRevisionsL10n;
+	$.fn.allPositions = function() {
+		var position = this.position() || {top: 0, left: 0}, parent = this.parent();
+		return _.extend( position, {
+			right:  parent.outerWidth()  - position.left - this.outerWidth(),
+			bottom: parent.outerHeight() - position.top  - this.outerHeight()
+		});
+	};
 
-	// Link any settings.
-	revisions.model.settings = l10n.settings || {};
-	delete l10n.settings;
+	// wp_localize_script transforms top-level numbers into strings. Undo that.
+	if ( revisions.settings.to )
+		revisions.settings.to = parseInt( revisions.settings.to, 10 );
+	if ( revisions.settings.from )
+		revisions.settings.from = parseInt( revisions.settings.from, 10 );
 
+	// wp_localize_script does not allow for top-level booleans. Fix that.
+	if ( revisions.settings.compareTwoMode )
+		revisions.settings.compareTwoMode = revisions.settings.compareTwoMode === '1';
 
 	/**
 	 * ========================================================================
-	 * CONTROLLERS
+	 * MODELS
 	 * ========================================================================
 	 */
+	revisions.model.Slider = Backbone.Model.extend({
+		defaults: {
+			value: null,
+			values: null,
+			min: 0,
+			max: 1,
+			step: 1,
+			range: false,
+			compareTwoMode: false
+		},
 
-	/**
-	 * wp.revisions.controller.Diff
-	 *
-	 * Controlls the diff
-	 */
-	Diff = revisions.controller.Diff = Backbone.Model.extend( {
-		rightDiff: 1,
-		leftDiff: 1,
-		revisions: null,
-		leftHandleRevisions: null,
-		rightHandleRevisions: null,
-		revisionsInteractions: null,
-		autosaves: true,
-		showSplitView: true,
-		singleRevision: true,
-		leftModelLoading: false,	// keep track of model loads
-		rightModelLoading: false,	// disallow slider interaction, also repeat loads, while loading
-		tickmarkView: null, // the slider tickmarks
-		slider: null, // the slider instance
+		initialize: function( options ) {
+			this.frame = options.frame;
+			this.revisions = options.revisions;
 
-		constructor: function() {
-			this.slider = new revisions.view.Slider();
-			if ( null === this.revisions ) {
-				this.revisions = new Revisions(); // set up collection
-				this.startRightModelLoading();
+			// Listen for changes to the revisions or mode from outside
+			this.listenTo( this.frame, 'update:revisions', this.receiveRevisions );
+			this.listenTo( this.frame, 'change:compareTwoMode', this.updateMode );
 
-				var self = this;
-				this.revisions.fetch({ // load revision data
-					success: function() {
-						self.stopRightModelLoading();
-						self.completeApplicationSetup();
+			// Listen for internal changes
+			this.listenTo( this, 'change:from', this.handleLocalChanges );
+			this.listenTo( this, 'change:to', this.handleLocalChanges );
+			this.listenTo( this, 'change:compareTwoMode', this.updateSliderSettings );
+			this.listenTo( this, 'update:revisions', this.updateSliderSettings );
+
+			// Listen for changes to the hovered revision
+			this.listenTo( this, 'change:hoveredRevision', this.hoverRevision );
+
+			this.set({
+				max:   this.revisions.length - 1,
+				compareTwoMode: this.frame.get('compareTwoMode'),
+				from: this.frame.get('from'),
+				to: this.frame.get('to')
+			});
+			this.updateSliderSettings();
+		},
+
+		getSliderValue: function( a, b ) {
+			return isRtl ? this.revisions.length - this.revisions.indexOf( this.get(a) ) - 1 : this.revisions.indexOf( this.get(b) );
+		},
+
+		updateSliderSettings: function() {
+			if ( this.get('compareTwoMode') ) {
+				this.set({
+					values: [
+						this.getSliderValue( 'to', 'from' ),
+						this.getSliderValue( 'from', 'to' )
+					],
+					value: null,
+					range: true // ensures handles cannot cross
+				});
+			} else {
+				this.set({
+					value: this.getSliderValue( 'to', 'to' ),
+					values: null,
+					range: false
+				});
+			}
+			this.trigger( 'update:slider' );
+		},
+
+		// Called when a revision is hovered
+		hoverRevision: function( model, value ) {
+			this.trigger( 'hovered:revision', value );
+		},
+
+		// Called when `compareTwoMode` changes
+		updateMode: function( model, value ) {
+			this.set({ compareTwoMode: value });
+		},
+
+		// Called when `from` or `to` changes in the local model
+		handleLocalChanges: function() {
+			this.frame.set({
+				from: this.get('from'),
+				to: this.get('to')
+			});
+		},
+
+		// Receives revisions changes from outside the model
+		receiveRevisions: function( from, to ) {
+			// Bail if nothing changed
+			if ( this.get('from') === from && this.get('to') === to )
+				return;
+
+			this.set({ from: from, to: to }, { silent: true });
+			this.trigger( 'update:revisions', from, to );
+		}
+
+	});
+
+	revisions.model.Tooltip = Backbone.Model.extend({
+		defaults: {
+			revision: null,
+			offset: {},
+			hovering: false, // Whether the mouse is hovering
+			scrubbing: false // Whether the mouse is scrubbing
+		},
+
+		initialize: function( options ) {
+			this.frame = options.frame;
+			this.revisions = options.revisions;
+			this.slider = options.slider;
+
+			this.listenTo( this.slider, 'hovered:revision', this.updateRevision );
+			this.listenTo( this.slider, 'change:hovering', this.setHovering );
+			this.listenTo( this.slider, 'change:scrubbing', this.setScrubbing );
+		},
+
+
+		updateRevision: function( revision ) {
+			this.set({ revision: revision });
+		},
+
+		setHovering: function( model, value ) {
+			this.set({ hovering: value });
+		},
+
+		setScrubbing: function( model, value ) {
+			this.set({ scrubbing: value });
+		}
+	});
+
+	revisions.model.Revision = Backbone.Model.extend({});
+
+	revisions.model.Revisions = Backbone.Collection.extend({
+		model: revisions.model.Revision,
+
+		initialize: function() {
+			_.bindAll( this, 'next', 'prev' );
+		},
+
+		next: function( revision ) {
+			var index = this.indexOf( revision );
+
+			if ( index !== -1 && index !== this.length - 1 )
+				return this.at( index + 1 );
+		},
+
+		prev: function( revision ) {
+			var index = this.indexOf( revision );
+
+			if ( index !== -1 && index !== 0 )
+				return this.at( index - 1 );
+		}
+	});
+
+	revisions.model.Field = Backbone.Model.extend({});
+
+	revisions.model.Fields = Backbone.Collection.extend({
+		model: revisions.model.Field
+	});
+
+	revisions.model.Diff = Backbone.Model.extend({
+		initialize: function( attributes, options ) {
+			var fields = this.get('fields');
+			this.unset('fields');
+
+			this.fields = new revisions.model.Fields( fields );
+		}
+	});
+
+	revisions.model.Diffs = Backbone.Collection.extend({
+		initialize: function( models, options ) {
+			_.bindAll( this, 'getClosestUnloaded' );
+			this.loadAll = _.once( this._loadAll );
+			this.revisions = options.revisions;
+			this.requests  = {};
+		},
+
+		model: revisions.model.Diff,
+
+		ensure: function( id, context ) {
+			var diff     = this.get( id );
+			var request  = this.requests[ id ];
+			var deferred = $.Deferred();
+			var ids      = {};
+			var from     = id.split(':')[0];
+			var to       = id.split(':')[1];
+			ids[id] = true;
+
+			wp.revisions.log( 'ensure', id );
+
+			this.trigger( 'ensure', ids, from, to, deferred.promise() );
+
+			if ( diff ) {
+				deferred.resolveWith( context, [ diff ] );
+			} else {
+				this.trigger( 'ensure:load', ids, from, to, deferred.promise() );
+				_.each( ids, _.bind( function( id ) {
+					// Remove anything that has an ongoing request
+					if ( this.requests[ id ] )
+						delete ids[ id ];
+					// Remove anything we already have
+					if ( this.get( id ) )
+						delete ids[ id ];
+				}, this ) );
+				if ( ! request ) {
+					// Always include the ID that started this ensure
+					ids[ id ] = true;
+					request   = this.load( _.keys( ids ) );
+				}
+
+				request.done( _.bind( function() {
+					deferred.resolveWith( context, [ this.get( id ) ] );
+				}, this ) ).fail( _.bind( function() {
+					deferred.reject();
+				}) );
+			}
+
+			return deferred.promise();
+		},
+
+		// Returns an array of proximal diffs
+		getClosestUnloaded: function( ids, centerId ) {
+			var self = this;
+			return _.chain([0].concat( ids )).initial().zip( ids ).sortBy( function( pair ) {
+				return Math.abs( centerId - pair[1] );
+			}).map( function( pair ) {
+				return pair.join(':');
+			}).filter( function( diffId ) {
+				return _.isUndefined( self.get( diffId ) ) && ! self.requests[ diffId ];
+			}).value();
+		},
+
+		_loadAll: function( allRevisionIds, centerId, num ) {
+			var self = this, deferred = $.Deferred();
+			diffs = _.first( this.getClosestUnloaded( allRevisionIds, centerId ), num );
+			if ( _.size( diffs ) > 0 ) {
+				this.load( diffs ).done( function() {
+					self._loadAll( allRevisionIds, centerId, num ).done( function() {
+						deferred.resolve();
+					});
+				}).fail( function() {
+					if ( 1 === num ) { // Already tried 1. This just isn't working. Give up.
+						deferred.reject();
+					} else { // Request fewer diffs this time
+						self._loadAll( allRevisionIds, centerId, Math.ceil( num / 2 ) ).done( function() {
+							deferred.resolve();
+						});
 					}
+				});
+			} else {
+				deferred.resolve();
+			}
+			return deferred;
+		},
+
+		load: function( comparisons ) {
+			wp.revisions.log( 'load', comparisons );
+			// Our collection should only ever grow, never shrink, so remove: false
+			return this.fetch({ data: { compare: comparisons }, remove: false }).done( function(){
+				wp.revisions.log( 'load:complete', comparisons );
+			});
+		},
+
+		sync: function( method, model, options ) {
+			if ( 'read' === method ) {
+				options = options || {};
+				options.context = this;
+				options.data = _.extend( options.data || {}, {
+					action: 'get-revision-diffs',
+					post_id: revisions.settings.postId
+				});
+
+				var deferred = wp.ajax.send( options );
+				var requests = this.requests;
+
+				// Record that we're requesting each diff.
+				if ( options.data.compare ) {
+					_.each( options.data.compare, function( id ) {
+						requests[ id ] = deferred;
+					});
+				}
+
+				// When the request completes, clear the stored request.
+				deferred.always( function() {
+					if ( options.data.compare ) {
+						_.each( options.data.compare, function( id ) {
+							delete requests[ id ];
+						});
+					}
+				});
+
+				return deferred;
+
+			// Otherwise, fall back to `Backbone.sync()`.
+			} else {
+				return Backbone.Model.prototype.sync.apply( this, arguments );
+			}
+		}
+	});
+
+
+	revisions.model.FrameState = Backbone.Model.extend({
+		defaults: {
+			loading: false,
+			error: false,
+			compareTwoMode: false
+		},
+
+		initialize: function( attributes, options ) {
+			var properties = {};
+
+			_.bindAll( this, 'receiveDiff' );
+			this._debouncedEnsureDiff = _.debounce( this._ensureDiff, 200 );
+
+			this.revisions = options.revisions;
+			this.diffs = new revisions.model.Diffs( [], { revisions: this.revisions });
+
+			// Set the initial diffs collection provided through the settings
+			this.diffs.set( revisions.settings.diffData );
+
+			// Set up internal listeners
+			this.listenTo( this, 'change:from', this.changeRevisionHandler );
+			this.listenTo( this, 'change:to', this.changeRevisionHandler );
+			this.listenTo( this, 'change:compareTwoMode', this.changeMode );
+			this.listenTo( this, 'update:revisions', this.updatedRevisions );
+			this.listenTo( this.diffs, 'ensure:load', this.updateLoadingStatus );
+			this.listenTo( this, 'update:diff', this.updateLoadingStatus );
+
+			// Set the initial revisions, baseUrl, and mode as provided through settings
+			properties.to = this.revisions.get( revisions.settings.to );
+			properties.from = this.revisions.get( revisions.settings.from );
+			properties.compareTwoMode = revisions.settings.compareTwoMode;
+			properties.baseUrl = revisions.settings.baseUrl;
+			this.set( properties );
+
+			// Start the router if browser supports History API
+			if ( window.history && window.history.pushState ) {
+				this.router = new revisions.Router({ model: this });
+				Backbone.history.start({ pushState: true });
+			}
+		},
+
+		updateLoadingStatus: function() {
+			this.set( 'error', false );
+			this.set( 'loading', ! this.diff() );
+		},
+
+		changeMode: function( model, value ) {
+			// If we were on the first revision before switching, we have to bump them over one
+			if ( value && 0 === this.revisions.indexOf( this.get('to') ) ) {
+				this.set({
+					from: this.revisions.at(0),
+					to: this.revisions.at(1)
 				});
 			}
 		},
 
-		loadDiffs: function( models ) {
-			var self = this,
-				revisionsToLoad = models.where( { completed: false } ),
-				delay = 0;
-
-			// match slider to passed revision_id
-			_.each( revisionsToLoad, function( revision ) {
-				if ( revision.get( 'ID' ) == revisions.model.settings.revision_id )
-					self.rightDiff = self.revisions.indexOf( revision ) + 1;
-			});
-
-			_.each( revisionsToLoad, function( revision ) {
-					_.delay( function() {
-						revision.fetch( {
-							update: true,
-							add: false,
-							remove: false,
-							success: function( model ) {
-								model.set( 'completed', true );
-
-								// stop spinner when all models are loaded
-								if ( 0 === models.where( { completed: false } ).length )
-									self.stopModelLoadingSpinner();
-
-								self.tickmarkView.render();
-
-								var totalChanges = model.get( 'linesAdded' ) + model.get( 'linesDeleted' ),
-									scopeOfChanges = 'vsmall';
-
-								// Note: hard coded scope of changes
-								// TODO change to dynamic based on range of values
-								if ( totalChanges > 1 && totalChanges <= 3 ) {
-									scopeOfChanges = 'small';
-								} else if ( totalChanges > 3 && totalChanges <= 5 ) {
-									scopeOfChanges = 'med';
-								} else if ( totalChanges > 5 && totalChanges <= 10 ) {
-									scopeOfChanges = 'large';
-								} else if ( totalChanges > 10 ) {
-									scopeOfChanges = 'vlarge';
-								}
-								model.set( 'scopeOfChanges', scopeOfChanges );
-								if ( 0 !== self.rightDiff &&
-									model.get( 'ID' ) === self.revisions.at( self.rightDiff - 1 ).get( 'ID' ) ) {
-									// reload if current model refreshed
-									self.revisionView.render();
-								}
-
-							}
-					} );
-					}, delay ) ;
-					delay = delay + 150; // stagger model loads to avoid hammering server with requests
-				}
-			);
-		},
-
-		startLeftModelLoading: function() {
-			this.leftModelLoading = true;
-			$('#revision-diff-container').addClass('left-model-loading');
-		},
-
-		stopLeftModelLoading: function() {
-			this.leftModelLoading = false;
-		},
-
-		startRightModelLoading: function() {
-			this.rightModelLoading = true;
-			$('#revision-diff-container').addClass('right-model-loading');
-		},
-
-		stopRightModelLoading: function() {
-			this.rightModelLoading = false;
-		},
-
-		stopModelLoadingSpinner: function() {
-			$('#revision-diff-container').removeClass('right-model-loading');
-			$('#revision-diff-container').removeClass('left-model-loading');
-		},
-
-		reloadModel: function() {
-			if ( this.singleRevision ) {
-				this.reloadModelSingle();
+		updatedRevisions: function( from, to ) {
+			if ( this.get( 'compareTwoMode' ) ) {
+				// TODO: compare-two loading strategy
 			} else {
-				this.reloadLeftRight();
+				this.diffs.loadAll( this.revisions.pluck('id'), to.id, 40 );
 			}
 		},
 
-		// load the models for the single handle mode
-		reloadModelSingle: function() {
-			var self = this;
+		// Fetch the currently loaded diff.
+		diff: function() {
+			return this.diffs.get( this._diffId );
+		},
 
-			self.startRightModelLoading();
+		// So long as `from` and `to` are changed at the same time, the diff
+		// will only be updated once. This is because Backbone updates all of
+		// the changed attributes in `set`, and then fires the `change` events.
+		updateDiff: function( options ) {
+			var from, to, diffId, diff;
 
-			self.revisions.reload({
-				options: {
-				'showAutosaves': self.autosaves,
-				'showSplitView': self.showSplitView
-				},
+			options = options || {};
+			from = this.get('from');
+			to = this.get('to');
+			diffId = ( from ? from.id : 0 ) + ':' + to.id;
 
-				success: function() {
-					var revisionCount = self.revisions.length;
-					self.revisionView.model = self.revisions;
-					self.revisionView.render();
-					self.loadDiffs( self.revisions );
-					self.tickmarkView.model = self.revisions;
-					self.tickmarkView.render();
-					self.slider.refresh({
-						'max': revisionCount - 1,
-						'value': self.rightDiff - 1
-					}, true);
-				},
+			// Check if we're actually changing the diff id.
+			if ( this._diffId === diffId )
+				return $.Deferred().reject().promise();
 
-				error: function() {
-					self.stopRightModelLoading();
+			this._diffId = diffId;
+			this.trigger( 'update:revisions', from, to );
+
+			diff = this.diffs.get( diffId );
+
+			// If we already have the diff, then immediately trigger the update.
+			if ( diff ) {
+				this.receiveDiff( diff );
+				return $.Deferred().resolve().promise();
+			// Otherwise, fetch the diff.
+			} else {
+				if ( options.immediate ) {
+					return this._ensureDiff();
+				} else {
+					this._debouncedEnsureDiff();
+					return $.Deferred().reject().promise();
 				}
-			});
+			}
 		},
 
-		// load the models for the left handle
-		reloadLeft: function() {
-			var self = this;
-			self.startLeftModelLoading();
-			self.leftHandleRevisions = new Revisions( {}, {
-				'compareTo': self.revisions.at( self.rightDiff - 1 ).get( 'ID' ),
-				'showAutosaves': self.autosaves,
-				'showSplitView': self.showSplitView,
-				'rightHandleAt': self.rightDiff
-			});
-
-			self.leftHandleRevisions.fetch({
-				success: function(){
-					self.stopLeftModelLoading();
-					self.loadDiffs( self.leftHandleRevisions );
-					self.tickmarkView.model = self.leftHandleRevisions;
-					self.slider.refresh({
-						'max': self.revisions.length
-					});
-					// ensure right handle not beyond length, in particular if viewing autosaves is switched from on to off
-					// the number of models in the collection might get shorter, this ensures right handle is not beyond last model
-					if ( self.rightDiff > self.revisions.length )
-						self.rightDiff = self.revisions.length;
-					},
-
-				error: function() {
-					self.stopLeftModelLoading();
-				}
-			});
+		// A simple wrapper around `updateDiff` to prevent the change event's
+		// parameters from being passed through.
+		changeRevisionHandler: function( model, value, options ) {
+			this.updateDiff();
 		},
 
-		// load the models for the right handle
-		reloadRight: function() {
-			var self = this;
-			self.startRightModelLoading();
-			self.rightHandleRevisions = new Revisions( {}, {
-				'compareTo': self.revisions.at( self.leftDiff - 1 ).get( 'ID' ),
-				'showAutosaves': self.autosaves,
-				'showSplitView': self.showSplitView,
-				'leftHandleAt': self.leftDiff
-			});
-
-			self.rightHandleRevisions.fetch({
-				success: function(){
-					self.stopRightModelLoading();
-					self.loadDiffs( self.rightHandleRevisions );
-					self.tickmarkView.model = self.rightHandleRevisions;
-					self.slider.refresh({
-						'max': self.revisions.length,
-						'values': [ self.leftDiff, self.rightDiff]
-					}, true);
-				},
-
-				error: function( response ) {
-					self.stopRightModelLoading();
-				}
-			});
-
+		receiveDiff: function( diff ) {
+			// Did we actually get a diff?
+			if ( _.isUndefined( diff ) || _.isUndefined( diff.id ) ) {
+				this.set({
+					loading: false,
+					error: true
+				});
+			} else if ( this._diffId === diff.id ) { // Make sure the current diff didn't change
+				this.trigger( 'update:diff', diff );
+			}
 		},
 
-		reloadLeftRight: function() {
-			this.startRightModelLoading();
-			this.startLeftModelLoading();
-			this.reloadLeft();
-			this.reloadRight();
-		},
-
-		disabledButtonCheck: function( val ) {
-			var maxVal = this.revisions.length - 1,
-				next = $( '#next' ),
-				prev = $( '#previous' );
-
-			// Disable "Next" button if you're on the last node
-			if ( maxVal === val )
-				next.prop( 'disabled', true );
-			else
-				next.prop( 'disabled', false );
-
-			// Disable "Previous" button if you're on the 0 node
-			if ( 0 === val )
-				prev.prop( 'disabled', true );
-			else
-				prev.prop( 'disabled', false );
-		},
-
-		completeApplicationSetup: function() {
-			this.revisionView = new revisions.view.Diff({
-				model: this.revisions
-			});
-			this.revisionView.render();
-
-			this.loadDiffs( this.revisions );
-
-			this.revisionsInteractions = new revisions.view.Interact({
-				model: this.revisions
-			});
-			this.revisionsInteractions.render();
-
-			this.tickmarkView = new revisions.view.Tickmarks({
-				model: this.revisions
-			});
-			this.tickmarkView.render();
-			this.tickmarkView.resetTicks();
+		_ensureDiff: function() {
+			return this.diffs.ensure( this._diffId, this ).always( this.receiveDiff );
 		}
 	});
 
@@ -289,493 +476,605 @@ window.wp = window.wp || {};
 	 * ========================================================================
 	 */
 
-	/**
-	 * wp.revisions.view.Slider
-	 *
-	 * The slider
-	 */
-	revisions.view.Slider = Backbone.View.extend({
-		el: $( '#diff-slider' ),
-		singleRevision: true,
+	// The frame view. This contains the entire page.
+	revisions.view.Frame = wp.Backbone.View.extend({
+		className: 'revisions',
+		template: wp.template('revisions-frame'),
 
-		initialize: function( options ) {
-			this.options = _.defaults( options || {}, {
-				value: 0,
-				min: 0,
-				max: 1,
-				step: 1
+		initialize: function() {
+			this.listenTo( this.model, 'update:diff', this.renderDiff );
+			this.listenTo( this.model, 'change:compareTwoMode', this.updateCompareTwoMode );
+			this.listenTo( this.model, 'change:loading', this.updateLoadingStatus );
+			this.listenTo( this.model, 'change:error', this.updateErrorStatus );
+
+			this.views.set( '.revisions-control-frame', new revisions.view.Controls({
+				model: this.model
+			}) );
+		},
+
+		render: function() {
+			wp.Backbone.View.prototype.render.apply( this, arguments );
+
+			$('html').css( 'overflow-y', 'scroll' );
+			$('#wpbody-content .wrap').append( this.el );
+			this.updateCompareTwoMode();
+			this.renderDiff( this.model.diff() );
+			this.views.ready();
+
+			return this;
+		},
+
+		renderDiff: function( diff ) {
+			this.views.set( '.revisions-diff-frame', new revisions.view.Diff({
+				model: diff
+			}) );
+		},
+
+		updateLoadingStatus: function() {
+			this.$el.toggleClass( 'loading', this.model.get('loading') );
+		},
+
+		updateErrorStatus: function() {
+			this.$el.toggleClass( 'diff-error', this.model.get('error') );
+		},
+
+		updateCompareTwoMode: function() {
+			this.$el.toggleClass( 'comparing-two-revisions', this.model.get('compareTwoMode') );
+		}
+	});
+
+	// The control view.
+	// This contains the revision slider, previous/next buttons, the meta info and the compare checkbox.
+	revisions.view.Controls = wp.Backbone.View.extend({
+		className: 'revisions-controls',
+
+		initialize: function() {
+			_.bindAll( this, 'setWidth' );
+
+			// Add the button view
+			this.views.add( new revisions.view.Buttons({
+				model: this.model
+			}) );
+
+			// Add the checkbox view
+			this.views.add( new revisions.view.Checkbox({
+				model: this.model
+			}) );
+
+			// Prep the slider model
+			var slider = new revisions.model.Slider({
+				frame: this.model,
+				revisions: this.model.revisions
+			});
+
+			// Prep the tooltip model
+			var tooltip = new revisions.model.Tooltip({
+				frame: this.model,
+				revisions: this.model.revisions,
+				slider: slider
+			});
+
+			// Add the tooltip view
+			this.views.add( new revisions.view.Tooltip({
+				model: tooltip
+			}) );
+
+			// Add the tickmarks view
+			this.views.add( new revisions.view.Tickmarks({
+				model: tooltip
+			}) );
+
+			// Add the slider view
+			this.views.add( new revisions.view.Slider({
+				model: slider
+			}) );
+
+			// Add the Metabox view
+			this.views.add( new revisions.view.Metabox({
+				model: this.model
+			}) );
+		},
+
+		ready: function() {
+			this.top = this.$el.offset().top;
+			this.window = $(window);
+			this.window.on( 'scroll.wp.revisions', {controls: this}, function(e) {
+				var controls = e.data.controls;
+				var container = controls.$el.parent();
+				var scrolled = controls.window.scrollTop();
+				var frame = controls.views.parent;
+
+				if ( scrolled >= controls.top ) {
+					if ( ! frame.$el.hasClass('pinned') ) {
+						controls.setWidth();
+						container.css('height', container.height() + 'px' );
+						controls.window.on('resize.wp.revisions.pinning click.wp.revisions.pinning', {controls: controls}, function(e) {
+							e.data.controls.setWidth();
+						});
+					}
+					frame.$el.addClass('pinned');
+				} else if ( frame.$el.hasClass('pinned') ) {
+					controls.window.off('.wp.revisions.pinning');
+					controls.$el.css('width', 'auto');
+					frame.$el.removeClass('pinned');
+					container.css('height', 'auto');
+					controls.top = controls.$el.offset().top;
+				} else {
+					controls.top = controls.$el.offset().top;
+				}
 			});
 		},
 
-		slide: function( event, ui ) {
-			if ( this.singleRevision ) {
-				Diff.rightDiff = ( ui.value + 1 );
-				Diff.revisionView.render();
-				Diff.disabledButtonCheck( ui.value );
+		setWidth: function() {
+			this.$el.css('width', this.$el.parent().width() + 'px');
+		}
+	});
+
+	// The tickmarks view
+	revisions.view.Tickmarks = wp.Backbone.View.extend({
+		className: 'revisions-tickmarks',
+		direction: isRtl ? 'right' : 'left',
+
+		initialize: function() {
+			this.listenTo( this.model, 'change:revision', this.reportTickPosition );
+		},
+
+		reportTickPosition: function( model, revision ) {
+			var offset, thisOffset, parentOffset, tick, index = this.model.revisions.indexOf( revision );
+			thisOffset = this.$el.allOffsets();
+			parentOffset = this.$el.parent().allOffsets();
+			if ( index === this.model.revisions.length - 1 ) {
+				// Last one
+				offset = {
+					rightPlusWidth: thisOffset.left - parentOffset.left + 1,
+					leftPlusWidth: thisOffset.right - parentOffset.right + 1
+				};
 			} else {
-				if ( ui.values[0] === ui.values[1] ) // prevent compare to self
-					return false;
+				// Normal tick
+				tick = this.$('div:nth-of-type(' + (index + 1) + ')');
+				offset = tick.allPositions();
+				_.extend( offset, {
+					left: offset.left + thisOffset.left - parentOffset.left,
+					right: offset.right + thisOffset.right - parentOffset.right
+				});
+				_.extend( offset, {
+					leftPlusWidth: offset.left + tick.outerWidth(),
+					rightPlusWidth: offset.right + tick.outerWidth()
+				});
+			}
+			this.model.set({ offset: offset });
+		},
 
-				if ( $( ui.handle ).hasClass( 'left-handle' ) ) {
-					// Left handler
-					if ( Diff.leftModelLoading ) // left model still loading, prevent sliding left handle
-						return false;
+		ready: function() {
+			var tickCount, tickWidth;
+			tickCount = this.model.revisions.length - 1;
+			tickWidth = 1 / tickCount;
+			this.$el.css('width', ( this.model.revisions.length * 50 ) + 'px');
 
-					Diff.leftDiff = ui.values[0];
-				} else {
-					// Right handler
-					if ( Diff.rightModelLoading ) // right model still loading, prevent sliding right handle
-						return false;
+			_(tickCount).times( function( index ){
+				this.$el.append( '<div style="' + this.direction + ': ' + ( 100 * tickWidth * index ) + '%"></div>' );
+			}, this );
+		}
+	});
 
-					Diff.rightDiff = ui.values[1];
-				}
+	// The metabox view
+	revisions.view.Metabox = wp.Backbone.View.extend({
+		className: 'revisions-meta',
 
-				if ( 0 === Diff.leftDiff ) {
-					$( '#revision-diff-container' ).addClass( 'current-version' );
-				} else {
-					$( '#revision-diff-container' ).removeClass( 'current-version' );
-				}
+		initialize: function() {
+			// Add the 'from' view
+			this.views.add( new revisions.view.MetaFrom({
+				model: this.model,
+				className: 'diff-meta diff-meta-from'
+			}) );
 
-				Diff.revisionView.render();
+			// Add the 'to' view
+			this.views.add( new revisions.view.MetaTo({
+				model: this.model
+			}) );
+		}
+	});
+
+	// The revision meta view (to be extended)
+	revisions.view.Meta = wp.Backbone.View.extend({
+		template: wp.template('revisions-meta'),
+
+		events: {
+			'click .restore-revision': 'restoreRevision'
+		},
+
+		initialize: function() {
+			this.listenTo( this.model, 'update:revisions', this.render );
+		},
+
+		prepare: function() {
+			return _.extend( this.model.toJSON()[this.type] || {}, {
+				type: this.type
+			});
+		},
+
+		restoreRevision: function() {
+			document.location = this.model.get('to').attributes.restoreUrl;
+		}
+	});
+
+	// The revision meta 'from' view
+	revisions.view.MetaFrom = revisions.view.Meta.extend({
+		className: 'diff-meta diff-meta-from',
+		type: 'from'
+	});
+
+	// The revision meta 'to' view
+	revisions.view.MetaTo = revisions.view.Meta.extend({
+		className: 'diff-meta diff-meta-to',
+		type: 'to'
+	});
+
+	// The checkbox view.
+	revisions.view.Checkbox = wp.Backbone.View.extend({
+		className: 'revisions-checkbox',
+		template: wp.template('revisions-checkbox'),
+
+		events: {
+			'click .compare-two-revisions': 'compareTwoToggle'
+		},
+
+		initialize: function() {
+			this.listenTo( this.model, 'change:compareTwoMode', this.updateCompareTwoMode );
+		},
+
+		ready: function() {
+			if ( this.model.revisions.length < 3 )
+				$('.revision-toggle-compare-mode').hide();
+		},
+
+		updateCompareTwoMode: function() {
+			this.$('.compare-two-revisions').prop( 'checked', this.model.get('compareTwoMode') );
+		},
+
+		// Toggle the compare two mode feature when the compare two checkbox is checked.
+		compareTwoToggle: function( event ) {
+			// Activate compare two mode?
+			this.model.set({ compareTwoMode: $('.compare-two-revisions').prop('checked') });
+		}
+	});
+
+	// The tooltip view.
+	// Encapsulates the tooltip.
+	revisions.view.Tooltip = wp.Backbone.View.extend({
+		className: 'revisions-tooltip',
+		template: wp.template('revisions-meta'),
+
+		initialize: function( options ) {
+			this.listenTo( this.model, 'change:offset', this.render );
+			this.listenTo( this.model, 'change:hovering', this.toggleVisibility );
+			this.listenTo( this.model, 'change:scrubbing', this.toggleVisibility );
+		},
+
+		prepare: function() {
+			if ( _.isNull( this.model.get('revision') ) )
+				return;
+			else
+				return _.extend( { type: 'tooltip' }, {
+					attributes: this.model.get('revision').toJSON()
+				});
+		},
+
+		render: function() {
+			var direction, directionVal, flipped, css = {}, position = this.model.revisions.indexOf( this.model.get('revision') ) + 1;
+			flipped = ( position / this.model.revisions.length ) > 0.5;
+			if ( isRtl ) {
+				direction = flipped ? 'left' : 'right';
+				directionVal = flipped ? 'leftPlusWidth' : direction;
+			} else {
+				direction = flipped ? 'right' : 'left';
+				directionVal = flipped ? 'rightPlusWidth' : direction;
+			}
+			otherDirection = 'right' === direction ? 'left': 'right';
+			wp.Backbone.View.prototype.render.apply( this, arguments );
+			css[direction] = this.model.get('offset')[directionVal] + 'px';
+			css[otherDirection] = '';
+			this.$el.toggleClass( 'flipped', flipped ).css( css );
+		},
+
+		visible: function() {
+			return this.model.get( 'scrubbing' ) || this.model.get( 'hovering' );
+		},
+
+		toggleVisibility: function( options ) {
+			if ( this.visible() )
+				this.$el.stop().show().fadeTo( 100 - this.el.style.opacity * 100, 1 );
+			else
+				this.$el.stop().fadeTo( this.el.style.opacity * 300, 0, function(){ $(this).hide(); } );
+			return;
+		}
+	});
+
+	// The buttons view.
+	// Encapsulates all of the configuration for the previous/next buttons.
+	revisions.view.Buttons = wp.Backbone.View.extend({
+		className: 'revisions-buttons',
+		template: wp.template('revisions-buttons'),
+
+		events: {
+			'click .revisions-next .button': 'nextRevision',
+			'click .revisions-previous .button': 'previousRevision'
+		},
+
+		initialize: function() {
+			this.listenTo( this.model, 'update:revisions', this.disabledButtonCheck );
+		},
+
+		ready: function() {
+			this.disabledButtonCheck();
+		},
+
+		// Go to a specific model index
+		gotoModel: function( toIndex ) {
+			var attributes = {
+				to: this.model.revisions.at( toIndex )
+			};
+			// If we're at the first revision, unset 'from'.
+			if ( toIndex )
+				attributes.from = this.model.revisions.at( toIndex - 1 );
+			else
+				this.model.unset('from', { silent: true });
+
+			this.model.set( attributes );
+		},
+
+		// Go to the 'next' revision
+		nextRevision: function() {
+			var toIndex = this.model.revisions.indexOf( this.model.get('to') ) + 1;
+			this.gotoModel( toIndex );
+		},
+
+		// Go to the 'previous' revision
+		previousRevision: function() {
+			var toIndex = this.model.revisions.indexOf( this.model.get('to') ) - 1;
+			this.gotoModel( toIndex );
+		},
+
+		// Check to see if the Previous or Next buttons need to be disabled or enabled.
+		disabledButtonCheck: function() {
+			var maxVal = this.model.revisions.length - 1,
+				minVal = 0,
+				next = $('.revisions-next .button'),
+				previous = $('.revisions-previous .button'),
+				val = this.model.revisions.indexOf( this.model.get('to') );
+
+			// Disable "Next" button if you're on the last node.
+			next.prop( 'disabled', ( maxVal === val ) );
+
+			// Disable "Previous" button if you're on the first node.
+			previous.prop( 'disabled', ( minVal === val ) );
+		}
+	});
+
+
+	// The slider view.
+	revisions.view.Slider = wp.Backbone.View.extend({
+		className: 'wp-slider',
+		direction: isRtl ? 'right' : 'left',
+
+		events: {
+			'mousemove' : 'mouseMove'
+		},
+
+		initialize: function() {
+			_.bindAll( this, 'start', 'slide', 'stop', 'mouseMove', 'mouseEnter', 'mouseLeave' );
+			this.listenTo( this.model, 'update:slider', this.applySliderSettings );
+		},
+
+		ready: function() {
+			this.$el.css('width', ( this.model.revisions.length * 50 ) + 'px');
+			this.$el.slider( _.extend( this.model.toJSON(), {
+				start: this.start,
+				slide: this.slide,
+				stop:  this.stop
+			}) );
+
+			this.$el.hoverIntent({
+				over: this.mouseEnter,
+				out: this.mouseLeave,
+				timeout: 800
+			});
+
+			this.applySliderSettings();
+		},
+
+		mouseMove: function( e ) {
+			var zoneCount = this.model.revisions.length - 1, // One fewer zone than models
+				sliderFrom = this.$el.allOffsets()[this.direction], // "From" edge of slider
+				sliderWidth = this.$el.width(), // Width of slider
+				tickWidth = sliderWidth / zoneCount, // Calculated width of zone
+				actualX = isRtl? $(window).width() - e.pageX : e.pageX; // Flipped for RTL - sliderFrom;
+			actualX = actualX - sliderFrom; // Offset of mouse position in slider
+			var currentModelIndex = Math.floor( ( actualX + ( tickWidth / 2 )  ) / tickWidth ); // Calculate the model index
+
+			// Ensure sane value for currentModelIndex.
+			if ( currentModelIndex < 0 )
+				currentModelIndex = 0;
+			else if ( currentModelIndex >= this.model.revisions.length )
+				currentModelIndex = this.model.revisions.length - 1;
+
+			// Update the tooltip mode
+			this.model.set({ hoveredRevision: this.model.revisions.at( currentModelIndex ) });
+		},
+
+		mouseLeave: function() {
+			this.model.set({ hovering: false });
+		},
+
+		mouseEnter: function() {
+			this.model.set({ hovering: true });
+		},
+
+		applySliderSettings: function() {
+			this.$el.slider( _.pick( this.model.toJSON(), 'value', 'values', 'range' ) );
+			var handles = this.$('a.ui-slider-handle');
+
+			if ( this.model.get('compareTwoMode') ) {
+				// in RTL mode the 'left handle' is the second in the slider, 'right' is first
+				handles.first()
+					.toggleClass( 'to-handle', !! isRtl )
+					.toggleClass( 'from-handle', ! isRtl );
+				handles.last()
+					.toggleClass( 'from-handle', !! isRtl )
+					.toggleClass( 'to-handle', ! isRtl );
+			} else {
+				handles.removeClass('from-handle to-handle');
 			}
 		},
 
 		start: function( event, ui ) {
-			// Not needed in one mode
-			if ( this.singleRevision )
-				return;
+			this.model.set({ scrubbing: true });
 
-			if ( $( ui.handle ).hasClass( 'left-handle' ) ) {
-				// Left handler
-				if ( Diff.leftModelLoading ) // left model still loading, prevent sliding left handle
-					return false;
+			// Track the mouse position to enable smooth dragging,
+			// overrides default jQuery UI step behavior.
+			$( window ).on( 'mousemove.wp.revisions', { view: this }, function( e ) {
+				var view              = e.data.view,
+				    leftDragBoundary  = view.$el.offset().left,
+				    sliderOffset      = leftDragBoundary,
+				    sliderRightEdge   = leftDragBoundary + view.$el.width(),
+				    rightDragBoundary = sliderRightEdge,
+				    leftDragReset     = '0',
+				    rightDragReset    = '100%',
+				    handle            = $( ui.handle );
 
-				Diff.revisionView.draggingLeft = true;
-
-				if ( Diff.revisionView.model !== Diff.leftHandleRevisions &&
-						null !== Diff.leftHandleRevisions ) {
-					Diff.revisionView.model = Diff.leftHandleRevisions;
-					Diff.tickmarkView.model = Diff.leftHandleRevisions;
-					Diff.tickmarkView.render();
+				// In two handle mode, ensure handles can't be dragged past each other.
+				// Adjust left/right boundaries and reset points.
+				if ( view.model.get('compareTwoMode') ) {
+					var handles = handle.parent().find('.ui-slider-handle');
+					if ( handle.is( handles.first() ) ) { // We're the left handle
+						rightDragBoundary = handles.last().offset().left;
+						rightDragReset    = rightDragBoundary - sliderOffset;
+					} else { // We're the right handle
+						leftDragBoundary = handles.first().offset().left + handles.first().width();
+						leftDragReset    = leftDragBoundary - sliderOffset;
+					}
 				}
 
-				Diff.leftDiffStart = ui.values[ 0 ];
+				// Follow mouse movements, as long as handle remains inside slider.
+				if ( e.pageX < leftDragBoundary ) {
+					handle.css( 'left', leftDragReset ); // Mouse to left of slider.
+				} else if ( e.pageX > rightDragBoundary ) {
+					handle.css( 'left', rightDragReset ); // Mouse to right of slider.
+				} else {
+					handle.css( 'left', e.pageX - sliderOffset ); // Mouse in slider.
+				}
+			} );
+		},
 
+		getPosition: function( position ) {
+			return isRtl ? this.model.revisions.length - position - 1: position;
+		},
+
+		// Responds to slide events
+		slide: function( event, ui ) {
+			var attributes, movedRevision;
+			// Compare two revisions mode
+			if ( this.model.get('compareTwoMode') ) {
+				// Prevent sliders from occupying same spot
+				if ( ui.values[1] === ui.values[0] )
+					return false;
+				if ( isRtl )
+					ui.values.reverse();
+				attributes = {
+					from: this.model.revisions.at( this.getPosition( ui.values[0] ) ),
+					to: this.model.revisions.at( this.getPosition( ui.values[1] ) )
+				};
 			} else {
-				// Right handler
-				if ( Diff.rightModelLoading || 0 === Diff.rightHandleRevisions.length) // right model still loading, prevent sliding right handle
-					return false;
-
-				if ( Diff.revisionView.model !== Diff.rightHandleRevisions &&
-						null !== Diff.rightHandleRevisions ) {
-					Diff.revisionView.model = Diff.rightHandleRevisions;
-					Diff.tickmarkView.model = Diff.rightHandleRevisions;
-					Diff.tickmarkView.render();
-				}
-
-				Diff.revisionView.draggingLeft = false;
-				Diff.rightDiffStart = ui.values[1];
+				attributes = {
+					to: this.model.revisions.at( this.getPosition( ui.value ) )
+				};
+				// If we're at the first revision, unset 'from'.
+				if ( this.getPosition( ui.value ) > 0 )
+					attributes.from = this.model.revisions.at( this.getPosition( ui.value ) - 1 );
+				else
+					attributes.from = undefined;
 			}
+			movedRevision = this.model.revisions.at( this.getPosition( ui.value ) );
+
+			// If we are scrubbing, a scrub to a revision is considered a hover
+			if ( this.model.get('scrubbing') )
+				attributes.hoveredRevision = movedRevision;
+
+			this.model.set( attributes );
 		},
 
 		stop: function( event, ui ) {
-			// Not needed in one mode
-			if ( this.singleRevision )
-				return;
-
-			// calculate and generate a diff for comparing to the left handle
-			// and the right handle, swap out when dragging
-			if ( $( ui.handle ).hasClass( 'left-handle' ) ) {
-				// Left hadnler
-				if ( Diff.leftDiffStart !== ui.values[0] )
-					Diff.reloadRight();
-			} else {
-				// Right handler
-				if ( Diff.rightDiffStart !== ui.values[1] )
-					Diff.reloadLeft();
-			}
-		},
-
-		addTooltip: function( handle, message ) {
-			handle.attr( 'title', '' ).tooltip({
-				track: false,
-
-				position: {
-					my: "left-30 top-66",
-					at: "top left",
-					using: function( position, feedback ) {
-						$( this ).css( position );
-						$( "<div>" )
-						.addClass( "arrow" )
-						.addClass( feedback.vertical )
-						.addClass( feedback.horizontal )
-						.appendTo( $( this ) );
-					}
-				},
-				show: false,
-				hide: false,
-				content:  function() {
-					return message;
-				}
-
-			} );
-		},
-
-		width: function() {
-			return $( '#diff-slider' ).width();
-		},
-
-		setWidth: function( width ) {
-			return $( '#diff-slider' ).width( width );
-		},
-
-		refresh: function( options, slide ) {
-			$( '#diff-slider' ).slider( 'option', options );
-
-			// Triggers the slide event
-			if ( slide )
-				$( '#diff-slider' ).trigger( 'slide' );
-
-			Diff.disabledButtonCheck( options.value );
-		},
-
-		option: function( key ) {
-			return $( '#diff-slider' ).slider( 'option', key );
-		},
-
-		render: function() {
-			var self = this;
-			// this.$el doesn't work, why?
-			$( '#diff-slider' ).slider( {
-				slide: $.proxy( self.slide, self ),
-				start: $.proxy( self.start, self ),
-				stop: $.proxy( self.stop, self )
-			} );
-
-			// Set options
-			this.refresh( this.options );
+			$( window ).off('mousemove.wp.revisions');
+			this.model.updateSliderSettings(); // To snap us back to a tick mark
+			this.model.set({ scrubbing: false });
 		}
 	});
 
-	/**
-	 * wp.revisions.view.Tickmarks
-	 *
-	 * The slider tickmarks.
-	 */
-	revisions.view.Tickmarks = Backbone.View.extend({
-		el: $('#diff-slider-ticks'),
-		template: wp.template('revision-ticks'),
-		model: Revision,
+	// The diff view.
+	// This is the view for the current active diff.
+	revisions.view.Diff = wp.Backbone.View.extend({
+		className: 'revisions-diff',
+		template: wp.template('revisions-diff'),
 
-		resetTicks: function() {
-			var sliderMax   = Diff.slider.option( 'max' );
-			var sliderWidth = Diff.slider.width();
-			var adjustMax   = Diff.singleRevision ? 0 : 1;
-			var tickWidth   = Math.floor( sliderWidth / ( sliderMax - adjustMax ) );
-
-			// TODO: adjust right margins for wider ticks so they stay centered on handle stop point
-
-			// set minimum and maximum widths for tick marks
-			tickWidth = (tickWidth > 50 ) ? 50 : tickWidth;
-			tickWidth = (tickWidth < 10 ) ? 10 : tickWidth;
-
-			sliderWidth = tickWidth * (sliderMax - adjustMax ) + 1;
-
-			Diff.slider.setWidth( sliderWidth );
-			$( '.diff-slider-ticks-wrapper' ).width( sliderWidth );
-			$( '#diff-slider-ticks' ).width( sliderWidth );
-
-			var aTickWidth = $( '.revision-tick' ).width();
-
-			if ( tickWidth !== aTickWidth ) { // is the width already set correctly?
-				$( '.revision-tick' ).each( function( ) {
-					$(this).css( 'margin-right', tickWidth - 1 + 'px'); // space the ticks out using right margin
-				});
-
-				$( '.revision-tick' ).last().css( 'margin-right', '0' ); // last tick gets no right margin
-			}
-
-		},
-
-		// render the tickmark view
-		render: function() {
-			var self = this;
-
-			if ( null !== self.model ) {
-				var addHtml = "";
-				_.each ( self.model.models, function( theModel ) {
-					addHtml = addHtml + self.template ( theModel.toJSON() );
-				});
-				self.$el.html( addHtml );
-
-			}
-			self.resetTicks();
-			return self;
+		// Generate the options to be passed to the template.
+		prepare: function() {
+			return _.extend({ fields: this.model.fields.toJSON() }, this.options );
 		}
 	});
 
-	/**
-	 * wp.revisions.view.Interact
-	 *
-	 * Next/Prev buttons and the slider
-	 */
-	// TODO: Change Interact to something else.
-	revisions.view.Interact = Backbone.View.extend({
-		el: $( '#revision-interact' ),
-		template: wp.template( 'revision-interact' ),
-
-		// next and previous buttons, only available in compare one mode
-		events: {
-			'click #next':     'nextRevision',
-			'click #previous': 'previousRevision'
+	// The revisions router
+	// takes URLs with #hash fragments and routes them
+	revisions.Router = Backbone.Router.extend({
+		initialize: function( options ) {
+			this.model = options.model;
+			this.routes = _.object([
+				[ this.baseUrl( '?from=:from&to=:to' ), 'handleRoute' ],
+				[ this.baseUrl( '?from=:from&to=:to' ), 'handleRoute' ]
+			]);
+			// Maintain state and history when navigating
+			this.listenTo( this.model, 'update:diff', _.debounce( this.updateUrl, 250 ) );
+			this.listenTo( this.model, 'change:compareTwoMode', this.updateUrl );
 		},
 
-		render: function() {
-			this.$el.html( this.template );
+		baseUrl: function( url ) {
+			return this.model.get('baseUrl') + url;
+		},
 
-			var modelcount = Diff.revisions.length;
+		updateUrl: function() {
+			var from = this.model.has('from') ? this.model.get('from').id : 0;
+			var to = this.model.get('to').id;
+			if ( this.model.get('compareTwoMode' ) )
+				this.navigate( this.baseUrl( '?from=' + from + '&to=' + to ) );
+			else
+				this.navigate( this.baseUrl( '?revision=' + to ) );
+		},
 
-			Diff.slider.singleRevision = Diff.singleRevision;
-			Diff.slider.render();
+		handleRoute: function( a, b ) {
+			var from, to, compareTwo = _.isUndefined( b );
 
-			if ( Diff.singleRevision ) {
-				Diff.slider.refresh({
-					value: Diff.rightDiff - 1,
-					min: 0,
-					max: modelcount - 1
-				});
-
-				$( '#revision-diff-container' ).removeClass( 'comparing-two-revisions' );
-
-			} else {
-				Diff.slider.refresh({
-					values: [ Diff.leftDiff, Diff.rightDiff + 1 ],
-					min: 1,
-					max: modelcount + 1,
-					range: true
-				});
-
-				$( '#revision-diff-container' ).addClass( 'comparing-two-revisions' );
-				$( '#diff-slider a.ui-slider-handle' ).first().addClass( 'left-handle' );
-				$( '#diff-slider a.ui-slider-handle' ).last().addClass( 'right-handle' );
-
+			if ( ! compareTwo ) {
+				b = this.model.revisions.get( a );
+				a = this.model.revisions.prev( b );
+				b = b ? b.id : 0;
+				a = a ? a.id : 0;
 			}
 
-			return this;
-		},
-
-		// go to the next revision
-		nextRevision: function() {
-			if ( Diff.rightDiff < this.model.length ) // unless at right boundry
-				Diff.rightDiff = Diff.rightDiff + 1 ;
-
-			Diff.revisionView.render();
-
-			Diff.slider.refresh({
-				value: Diff.rightDiff - 1
-			}, true );
-		},
-
-		// go the the previous revision
-		previousRevision: function() {
-			if ( Diff.rightDiff > 1 ) // unless at left boundry
-				Diff.rightDiff = Diff.rightDiff - 1 ;
-
-			Diff.revisionView.render();
-
-			Diff.slider.refresh({
-				value: Diff.rightDiff - 1
-			}, true );
-		}
-	});
-
-	/**
-	 * wp.revisions.view.Diff
-	 *
-	 * Next/Prev buttons and the slider
-	 */
-	revisions.view.Diff = Backbone.View.extend({
-		el: $( '#revisions-diff' ),
-		template: wp.template( 'revisions-diff' ),
-		draggingLeft: false,
-
-		// the compare two button is in this view, add the interaction here
-		events: {
-			'click #compare-two-revisions': 'compareTwo',
-			'click #restore-revision':      'restore'
-		},
-
-		// render the revisions
-		render: function() {
-			var addHtml = '';
-			var thediff;
-
-			// compare two revisions mode?
-			if ( ! Diff.singleRevision ) {
-				if ( this.draggingLeft ) {
-					thediff = Diff.leftDiff - 1;
-					if ( this.model.at( thediff ) ) {
-						addHtml = this.template( this.model.at( thediff ).toJSON() );
-					}
-				} else { // dragging right handle
-					thediff = Diff.rightDiff -1;
-					if ( this.model.at( thediff ) ) {
-						addHtml = this.template( this.model.at( thediff ).toJSON() );
-					}
-				}
-			} else { // end compare two revisions mode, eg only one slider handle
-				if ( this.model.at( Diff.rightDiff - 1 ) ) {
-					addHtml = this.template( this.model.at( Diff.rightDiff - 1 ).toJSON() );
-				}
-			}
-			this.$el.html( addHtml );
-
-			if ( this.model.length < 2 ) {
-				$( '#diff-slider' ).hide(); // don't allow compare two if fewer than three revisions
-				$( '.diff-slider-ticks-wrapper' ).hide();
-			}
-
-			// add tooltips to the handles
-			if ( ! Diff.singleRevision ) {
-				Diff.slider.addTooltip ( $( 'a.ui-slider-handle.left-handle' ),
-					( Diff.leftDiff < 0 ) ? '' : Diff.revisions.at( Diff.leftDiff - 1 ).get( 'titleTooltip' ) );
-				Diff.slider.addTooltip ( $( 'a.ui-slider-handle.right-handle' ),
-					( Diff.rightDiff > Diff.revisions.length ) ? '' : Diff.revisions.at( Diff.rightDiff - 1 ).get( 'titleTooltip' ) );
-			} else {
-				Diff.slider.addTooltip ( $( 'a.ui-slider-handle' ),
-					( Diff.rightDiff > Diff.revisions.length ) ? '' : Diff.revisions.at( Diff.rightDiff - 1 ).get( 'titleTooltip' ) );
-			}
-
-			this.toggleCompareTwoCheckbox();
-
-			// hide the restore button when on the last sport/current post data
-			$( '#restore-revision' ).toggle( ! Diff.revisions.at( Diff.rightDiff - 1 ).get( 'isCurrent' ) );
-
-			return this;
-		},
-
-		toggleCompareTwoCheckbox: function() {
-			// don't allow compare two if fewer than three revisions
-			if ( this.model.length < 3 )
-				$( '#toggle-revision-compare-mode' ).hide();
-
-			$( '#compare-two-revisions' ).prop( 'checked', ! Diff.singleRevision );
-		},
-
-		// turn on/off the compare two mode
-		compareTwo: function() {
-			if ( $( '#compare-two-revisions' ).is( ':checked' ) ) { // compare 2 mode
-				Diff.singleRevision = false ;
-
-				if ( 1 === Diff.rightDiff )
-					Diff.rightDiff = 2;
-
-				Diff.revisionView.draggingLeft = false;
-
-				revisions.model.settings.revision_id = ''; // reset passed revision id so switching back to one handle mode doesn't re-select revision
-				Diff.reloadLeftRight();
-				Diff.revisionView.model = Diff.rightHandleRevisions;
-
-			} else { // compare one mode
-				Diff.singleRevision = true;
-				Diff.revisionView.draggingLeft = false;
-				Diff.reloadModelSingle();
-			}
-			Diff.revisionsInteractions.render();
-			Diff.tickmarkView.render();
-		},
-
-		restore: function() {
-			document.location = $( '#restore-revision' ).data( 'restoreLink' );
-		}
-	});
-
-
-	/**
-	 * ========================================================================
-	 * MODELS
-	 * ========================================================================
-	 */
-
-	/**
-	 * wp.revisions.Revision
-	 */
-	Revision = revisions.model.Revision = Backbone.Model.extend({
-		idAttribute: 'ID',
-
-		defaults: {
-			ID: 0,
-			titleTo: '',
-			titleTooltip: '',
-			titleFrom: '',
-			diff: '<div class="diff-loading"><div class="spinner"></div></div>',
-			restoreLink: '',
-			completed: false,
-			linesAdded: 0,
-			linesDeleted: 0,
-			scopeOfChanges: 'none',
-			previousID: 0,
-			isCurrent: false
-		},
-
-		url: function() {
-			if ( Diff.singleRevision ) {
-				return ajaxurl +
-					'?action=revisions-data' +
-					'&show_autosaves=true' +
-					'&show_split_view=true' +
-					'&nonce=' + revisions.model.settings.nonce +
-					'&single_revision_id=' + this.id +
-					'&compare_to=' + this.get( 'previousID' ) +
-					'&post_id=' + revisions.model.settings.post_id;
-			} else {
-				return this.collection.url() + '&single_revision_id=' + this.id;
-			}
-
-		}
-	});
-
-	/**
-	 * wp.revisions.Revisions
-	 */
-	Revisions = revisions.Revisions = Backbone.Collection.extend({
-		model: Revision,
-
-		initialize: function( models, options ) {
-			this.options = _.defaults( options || {}, {
-				'compareTo': revisions.model.settings.post_id,
-				'post_id': revisions.model.settings.post_id,
-				'showAutosaves': true,
-				'showSplitView': true,
-				'rightHandleAt': 0,
-				'leftHandleAt': 0,
-				'nonce': revisions.model.settings.nonce
-			});
-		},
-
-		url: function() {
-			return ajaxurl +
-				'?action=revisions-data' +
-				'&compare_to=' + this.options.compareTo +
-				'&post_id=' + this.options.post_id +
-				'&show_autosaves=' + this.options.showAutosaves +
-				'&show_split_view=' + this.options.showSplitView +
-				'&right_handle_at=' + this.options.rightHandleAt +
-				'&left_handle_at=' + this.options.leftHandleAt +
-				'&nonce=' + this.options.nonce;
-		},
-
-		reload: function( options ) {
-			this.options = _.defaults( options.options || {}, this.options );
-
-			this.fetch({
-				success: options.success || null,
-				error: options.error || null
+			this.model.set({
+				from: this.model.revisions.get( parseInt( a, 10 ) ),
+				to: this.model.revisions.get( parseInt( a, 10 ) ),
+				compareTwoMode: compareTwo
 			});
 		}
+	});
 
-	} );
+	// Initialize the revisions UI.
+	revisions.init = function() {
+		revisions.view.frame = new revisions.view.Frame({
+			model: new revisions.model.FrameState({}, {
+				revisions: new revisions.model.Revisions( revisions.settings.revisionData )
+			})
+		}).render();
+	};
 
-	$( wp.revisions );
-
+	$( revisions.init );
 }(jQuery));

@@ -247,10 +247,10 @@ function update_option( $option, $newvalue ) {
 	if ( ! defined( 'WP_INSTALLING' ) ) {
 		$alloptions = wp_load_alloptions();
 		if ( isset( $alloptions[$option] ) ) {
-			$alloptions[$option] = $_newvalue;
+			$alloptions[$option] = $newvalue;
 			wp_cache_set( 'alloptions', $alloptions, 'options' );
 		} else {
-			wp_cache_set( $option, $_newvalue, 'options' );
+			wp_cache_set( $option, $newvalue, 'options' );
 		}
 	}
 
@@ -515,8 +515,8 @@ function set_transient( $transient, $value, $expiration = 0 ) {
 		}
 	}
 	if ( $result ) {
-		do_action( 'set_transient_' . $transient );
-		do_action( 'setted_transient', $transient );
+		do_action( 'set_transient_' . $transient, $value, $expiration );
+		do_action( 'setted_transient', $transient, $value, $expiration );
 	}
 	return $result;
 }
@@ -1052,8 +1052,8 @@ function set_site_transient( $transient, $value, $expiration = 0 ) {
 		}
 	}
 	if ( $result ) {
-		do_action( 'set_site_transient_' . $transient );
-		do_action( 'setted_site_transient', $transient );
+		do_action( 'set_site_transient_' . $transient, $value, $expiration );
+		do_action( 'setted_site_transient', $transient, $value, $expiration );
 	}
 	return $result;
 }

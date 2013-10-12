@@ -392,8 +392,10 @@ class WP_User_Query {
 			$qv['fields'] = array_unique( $qv['fields'] );
 
 			$this->query_fields = array();
-			foreach ( $qv['fields'] as $field )
-				$this->query_fields[] = $wpdb->users . '.' . esc_sql( $field );
+			foreach ( $qv['fields'] as $field ) {
+				$field = 'ID' === $field ? 'ID' : sanitize_key( $field );
+				$this->query_fields[] = "$wpdb->users.$field";
+			}
 			$this->query_fields = implode( ',', $this->query_fields );
 		} elseif ( 'all' == $qv['fields'] ) {
 			$this->query_fields = "$wpdb->users.*";
@@ -791,7 +793,7 @@ function is_user_member_of_blog( $user_id = 0, $blog_id = 0 ) {
  * @param string $meta_key Metadata name.
  * @param mixed $meta_value Metadata value.
  * @param bool $unique Optional, default is false. Whether the same key should not be added.
- * @return bool False for failure. True for success.
+ * @return int|bool Meta ID on success, false on failure.
  */
 function add_user_meta($user_id, $meta_key, $meta_value, $unique = false) {
 	return add_metadata('user', $user_id, $meta_key, $meta_value, $unique);
@@ -811,7 +813,7 @@ function add_user_meta($user_id, $meta_key, $meta_value, $unique = false) {
  * @param int $user_id user ID
  * @param string $meta_key Metadata name.
  * @param mixed $meta_value Optional. Metadata value.
- * @return bool False for failure. True for success.
+ * @return bool True on success, false on failure.
  */
 function delete_user_meta($user_id, $meta_key, $meta_value = '') {
 	return delete_metadata('user', $user_id, $meta_key, $meta_value);
@@ -850,7 +852,7 @@ function get_user_meta($user_id, $key = '', $single = false) {
  * @param string $meta_key Metadata key.
  * @param mixed $meta_value Metadata value.
  * @param mixed $prev_value Optional. Previous value to check before removing.
- * @return bool False on failure, true if success.
+ * @return bool True on success, false on failure.
  */
 function update_user_meta($user_id, $meta_key, $meta_value, $prev_value = '') {
 	return update_metadata('user', $user_id, $meta_key, $meta_value, $prev_value);
@@ -1029,7 +1031,7 @@ function wp_dropdown_users( $args = '' ) {
 	extract( $r, EXTR_SKIP );
 
 	$query_args = wp_array_slice_assoc( $r, array( 'blog_id', 'include', 'exclude', 'orderby', 'order', 'who' ) );
-	$query_args['fields'] = array( 'ID', $show );
+	$query_args['fields'] = array( 'ID', 'user_login', $show );
 	$users = get_users( $query_args );
 
 	$output = '';
@@ -1425,9 +1427,6 @@ function wp_insert_user( $userdata ) {
  *
  * It is possible to update a user's password by specifying the 'user_pass'
  * value in the $userdata parameter array.
- *
- * If $userdata does not contain an 'ID' key, then a new user will be created
- * and the new user's ID will be returned.
  *
  * If current user's password is being updated, then the cookies will be
  * cleared.

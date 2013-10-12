@@ -250,7 +250,6 @@ if ( !( IS_PROFILE_PAGE && !$user_can_edit ) ) : ?>
 <td><select name="role" id="role">
 <?php
 // Compare user role against currently editable roles
-// TODO: create a function that does this: wp_get_user_role()
 $user_roles = array_intersect( array_values( $profileuser->roles ), array_keys( get_editable_roles() ) );
 $user_role  = array_shift( $user_roles );
 
@@ -377,10 +376,18 @@ if ( $show_password_fields ) :
 ?>
 <tr id="password">
 	<th><label for="pass1"><?php _e('New Password'); ?></label></th>
-	<td><input type="password" name="pass1" id="pass1" size="16" value="" autocomplete="off" /> <span class="description"><?php _e("If you would like to change the password type a new one. Otherwise leave this blank."); ?></span><br />
-		<input type="password" name="pass2" id="pass2" size="16" value="" autocomplete="off" /> <span class="description"><?php _e("Type your new password again."); ?></span><br />
-		<div id="pass-strength-result"><?php _e('Strength indicator'); ?></div>
-		<p class="description indicator-hint"><?php _e('Hint: The password should be at least seven characters long. To make it stronger, use upper and lower case letters, numbers and symbols like ! " ? $ % ^ &amp; ).'); ?></p>
+	<td>
+		<input class="hidden" value=" " /><!-- #24364 workaround -->
+		<input type="password" name="pass1" id="pass1" size="16" value="" autocomplete="off" /> <span class="description"><?php _e("If you would like to change the password type a new one. Otherwise leave this blank."); ?></span>
+	</td>
+</tr>
+<tr>
+	<th scope="row"><label for="pass2"><?php _e('Repeat New Password'); ?></label></th>
+	<td>
+	<input name="pass2" type="password" id="pass2" size="16" value="" autocomplete="off" /> <span class="description" for="pass2"><?php _e("Type your new password again."); ?></span>
+	<br />
+	<div id="pass-strength-result"><?php _e('Strength indicator'); ?></div>
+	<p class="description indicator-hint"><?php _e('Hint: The password should be at least seven characters long. To make it stronger, use upper and lower case letters, numbers and symbols like ! " ? $ % ^ &amp; ).'); ?></p>
 	</td>
 </tr>
 <?php endif; ?>

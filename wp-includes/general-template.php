@@ -25,7 +25,8 @@ function get_header( $name = null ) {
 	do_action( 'get_header', $name );
 
 	$templates = array();
-	if ( isset($name) )
+	$name = (string) $name;
+	if ( '' !== $name )
 		$templates[] = "header-{$name}.php";
 
 	$templates[] = 'header.php';
@@ -54,7 +55,8 @@ function get_footer( $name = null ) {
 	do_action( 'get_footer', $name );
 
 	$templates = array();
-	if ( isset($name) )
+	$name = (string) $name;
+	if ( '' !== $name )
 		$templates[] = "footer-{$name}.php";
 
 	$templates[] = 'footer.php';
@@ -83,7 +85,8 @@ function get_sidebar( $name = null ) {
 	do_action( 'get_sidebar', $name );
 
 	$templates = array();
-	if ( isset($name) )
+	$name = (string) $name;
+	if ( '' !== $name )
 		$templates[] = "sidebar-{$name}.php";
 
 	$templates[] = 'sidebar.php';
@@ -120,7 +123,8 @@ function get_template_part( $slug, $name = null ) {
 	do_action( "get_template_part_{$slug}", $slug, $name );
 
 	$templates = array();
-	if ( isset($name) )
+	$name = (string) $name;
+	if ( '' !== $name )
 		$templates[] = "{$slug}-{$name}.php";
 
 	$templates[] = "{$slug}.php";
@@ -155,7 +159,8 @@ function get_template_part( $slug, $name = null ) {
 function get_search_form( $echo = true ) {
 	do_action( 'pre_get_search_form' );
 
-	$format = apply_filters( 'search_form_format', 'xhtml' );
+	$format = current_theme_supports( 'html5', 'search-form' ) ? 'html5' : 'xhtml';
+	$format = apply_filters( 'search_form_format', $format );
 
 	$search_form_template = locate_template( 'searchform.php' );
 	if ( '' != $search_form_template ) {
@@ -164,11 +169,12 @@ function get_search_form( $echo = true ) {
 		$form = ob_get_clean();
 	} else {
 		if ( 'html5' == $format ) {
-			$form = '<form role="search" method="get" class="searchform" action="' . esc_url( home_url( '/' ) ) . '">
-				<label><span class="screen-reader-text">' . _x( 'Search for:', 'label' ) . '</span>
-					<input type="search" placeholder="' . esc_attr_x( 'Search &hellip;', 'placeholder' ) . '" value="' . get_search_query() . '" name="s" title="' . _x( 'Search for:', 'label' ) . '" />
+			$form = '<form role="search" method="get" class="search-form" action="' . esc_url( home_url( '/' ) ) . '">
+				<label>
+					<span class="screen-reader-text">' . _x( 'Search for:', 'label' ) . '</span>
+					<input type="search" class="search-field" placeholder="' . esc_attr_x( 'Search &hellip;', 'placeholder' ) . '" value="' . get_search_query() . '" name="s" title="' . _x( 'Search for:', 'label' ) . '" />
 				</label>
-				<input type="submit" class="searchsubmit" value="'. esc_attr_x( 'Search', 'submit button' ) .'" />
+				<input type="submit" class="search-submit" value="'. esc_attr_x( 'Search', 'submit button' ) .'" />
 			</form>';
 		} else {
 			$form = '<form role="search" method="get" id="searchform" class="searchform" action="' . esc_url( home_url( '/' ) ) . '">
@@ -1579,7 +1585,7 @@ function the_weekday() {
  * @param string $after Optional Output after the date.
  */
 function the_weekday_date($before='',$after='') {
-	global $wp_locale, $day, $previousweekday;
+	global $wp_locale, $currentday, $previousweekday;
 	$the_weekday_date = '';
 	if ( $currentday != $previousweekday ) {
 		$the_weekday_date .= $before;
@@ -1732,22 +1738,8 @@ function wlwmanifest_link() {
  * @since 2.1.0
  */
 function noindex() {
-	$public = get_option( 'blog_public' );
-
-	if ( is_multisite() ) {
-		// Compare local and global and override with the local setting if they
-		// don't match.
-
-		global $current_blog;
-
-		if ( ( '' != $public ) && ( $public != $current_blog->public ) ) {
-			update_blog_status( get_current_blog_id(), 'public', $public );
-			$current_blog->public = $public;
-		}
-	}
-
 	// If the blog is not public, tell robots to go away.
-	if ( '0' == $public )
+	if ( '0' == get_option('blog_public') )
 		wp_no_robots();
 }
 

@@ -229,9 +229,7 @@ function wp_admin_bar_site_menu( $wp_admin_bar ) {
 		$blogname = sprintf( __('Global Dashboard: %s'), esc_html( $current_site->site_name ) );
 	}
 
-	$title = wp_html_excerpt( $blogname, 40 );
-	if ( $title != $blogname )
-		$title = trim( $title ) . '&hellip;';
+	$title = wp_html_excerpt( $blogname, 40, '&hellip;' );
 
 	$wp_admin_bar->add_menu( array(
 		'id'    => 'site-name',
@@ -431,7 +429,7 @@ function wp_admin_bar_edit_menu( $wp_admin_bar ) {
 		if ( 'post' == $current_screen->base
 			&& 'add' != $current_screen->action
 			&& ( $post_type_object = get_post_type_object( $post->post_type ) )
-			&& current_user_can( $post_type_object->cap->read_post, $post->ID )
+			&& current_user_can( 'read_post', $post->ID )
 			&& ( $post_type_object->public )
 			&& ( $post_type_object->show_in_admin_bar ) )
 		{
@@ -459,7 +457,7 @@ function wp_admin_bar_edit_menu( $wp_admin_bar ) {
 
 		if ( ! empty( $current_object->post_type )
 			&& ( $post_type_object = get_post_type_object( $current_object->post_type ) )
-			&& current_user_can( $post_type_object->cap->edit_post, $current_object->ID )
+			&& current_user_can( 'edit_post', $current_object->ID )
 			&& $post_type_object->show_ui && $post_type_object->show_in_admin_bar )
 		{
 			$wp_admin_bar->add_menu( array(

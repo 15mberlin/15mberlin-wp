@@ -340,7 +340,7 @@ function search_theme_directories( $force = false ) {
 
 	// Set up maybe-relative, maybe-absolute array of theme directories.
 	// We always want to return absolute, but we need to cache relative
-	// use in for get_theme_root().
+	// to use in get_theme_root().
 	foreach ( $wp_theme_directories as $theme_root ) {
 		if ( 0 === strpos( $theme_root, WP_CONTENT_DIR ) )
 			$relative_theme_roots[ str_replace( WP_CONTENT_DIR, '', $theme_root ) ] = $theme_root;
@@ -544,7 +544,7 @@ function locale_stylesheet() {
 /**
  * Start preview theme output buffer.
  *
- * Will only preform task if the user has permissions and template and preview
+ * Will only perform task if the user has permissions and template and preview
  * query variables exist.
  *
  * @since 2.6.0
@@ -1259,17 +1259,23 @@ function add_theme_support( $feature ) {
 		$args = array_slice( func_get_args(), 1 );
 
 	switch ( $feature ) {
-		case 'structured-post-formats' :
-			if ( is_array( $args[0] ) )
-				$args[0] = array_intersect( $args[0], get_post_format_slugs() );
-			// structured-post-formats support automatically adds support for post-formats.
-			$_wp_theme_features['post-formats'] = $args;
 		case 'post-formats' :
-			// An existing structured-post-formats support declaration overrides post-formats.
-			if ( current_theme_supports( 'structured-post-formats' ) )
-				$args = get_theme_support( 'structured-post-formats' );
-			elseif ( is_array( $args[0] ) )
-				$args[0] = array_intersect( $args[0], get_post_format_slugs() );
+			if ( is_array( $args[0] ) )
+				$args[0] = array_intersect( $args[0], array_keys( get_post_format_slugs() ) );
+			break;
+
+		case 'html5' :
+			// You can't just pass 'html5', you need to pass an array of types.
+			if ( empty( $args[0] ) ) {
+				$args = array( 0 => array( 'comment-list', 'comment-form', 'search-form' ) );
+			} elseif ( ! is_array( $args[0] ) ) {
+				_doing_it_wrong( "add_theme_support( 'html5' )", 'You need to pass an array of types.', '3.6.1' );
+				return false;
+			}
+
+			// Calling 'html5' again merges, rather than overwrites.
+			if ( isset( $_wp_theme_features['html5'] ) )
+				$args[0] = array_merge( $_wp_theme_features['html5'][0], $args[0] );
 			break;
 
 		case 'custom-header-uploads' :
@@ -1555,12 +1561,15 @@ function current_theme_supports( $feature ) {
 			return in_array( $content_type, $_wp_theme_features[$feature][0] );
 			break;
 
-		case 'structured-post-formats':
+		case 'html5':
 		case 'post-formats':
 			// specific post formats can be registered by passing an array of types to
 			// add_theme_support()
-			$post_format = $args[0];
-			return in_array( $post_format, $_wp_theme_features[$feature][0] );
+
+			// Specific areas of HTML5 support *must* be passed via an array to add_theme_support()
+
+			$type = $args[0];
+			return in_array( $type, $_wp_theme_features[$feature][0] );
 			break;
 
 		case 'custom-header':

@@ -253,17 +253,14 @@ function timer_stop( $display = 0, $precision = 3 ) { // if called like timer_st
  * When WP_DEBUG_LOG is true, errors will be logged to wp-content/debug.log.
  * WP_DEBUG_LOG defaults to false.
  *
+ * Errors are never displayed for XML-RPC requests.
+ *
  * @access private
  * @since 3.0.0
  */
 function wp_debug_mode() {
 	if ( WP_DEBUG ) {
-		// E_DEPRECATED is a core PHP constant in PHP 5.3. Don't define this yourself.
-		// The two statements are equivalent, just one is for 5.3+ and for less than 5.3.
-		if ( defined( 'E_DEPRECATED' ) )
-			error_reporting( E_ALL & ~E_DEPRECATED & ~E_STRICT );
-		else
-			error_reporting( E_ALL );
+		error_reporting( E_ALL );
 
 		if ( WP_DEBUG_DISPLAY )
 			ini_set( 'display_errors', 1 );
@@ -277,6 +274,8 @@ function wp_debug_mode() {
 	} else {
 		error_reporting( E_CORE_ERROR | E_CORE_WARNING | E_COMPILE_ERROR | E_ERROR | E_WARNING | E_PARSE | E_USER_ERROR | E_USER_WARNING | E_RECOVERABLE_ERROR );
 	}
+	if ( defined( 'XMLRPC_REQUEST' ) )
+		ini_set( 'display_errors', 0 );
 }
 
 /**

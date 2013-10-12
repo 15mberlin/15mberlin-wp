@@ -232,7 +232,7 @@ function post_permalink( $post_id = 0, $deprecated = '' ) {
  *
  * @since 1.5.0
  *
- * @param mixed $post Optional. Post ID or object.
+ * @param int|object $post Optional. Post ID or object.
  * @param bool $leavename Optional, defaults to false. Whether to keep page name.
  * @param bool $sample Optional, defaults to false. Is it a sample permalink.
  * @return string
@@ -256,7 +256,7 @@ function get_page_link( $post = false, $leavename = false, $sample = false ) {
  * @since 2.1.0
  * @access private
  *
- * @param mixed $post Optional. Post ID or object.
+ * @param int|object $post Optional. Post ID or object.
  * @param bool $leavename Optional. Leave name.
  * @param bool $sample Optional. Sample permalink.
  * @return string
@@ -291,7 +291,7 @@ function _get_page_link( $post = false, $leavename = false, $sample = false ) {
  *
  * @since 2.0.0
  *
- * @param mixed $post Optional. Post ID or object.
+ * @param int|object $post Optional. Post ID or object.
  * @param bool $leavename Optional. Leave name.
  * @return string
  */
@@ -301,9 +301,9 @@ function get_attachment_link( $post = null, $leavename = false ) {
 	$link = false;
 
 	$post = get_post( $post );
+	$parent = ( $post->post_parent > 0 && $post->post_parent != $post->ID ) ? get_post( $post->post_parent ) : false;
 
-	if ( $wp_rewrite->using_permalinks() && ( $post->post_parent > 0 ) && ( $post->post_parent != $post->ID ) ) {
-		$parent = get_post($post->post_parent);
+	if ( $wp_rewrite->using_permalinks() && $parent ) {
 		if ( 'page' == $parent->post_type )
 			$parentlink = _get_page_link( $post->post_parent ); // Ignores page_on_front
 		else
@@ -897,7 +897,9 @@ function get_edit_post_link( $id = 0, $context = 'display' ) {
 	if ( ! $post = get_post( $id ) )
 		return;
 
-	if ( 'display' == $context )
+	if ( 'revision' === $post->post_type )
+		$action = '';
+	elseif ( 'display' == $context )
 		$action = '&amp;action=edit';
 	else
 		$action = '&action=edit';
@@ -906,7 +908,7 @@ function get_edit_post_link( $id = 0, $context = 'display' ) {
 	if ( !$post_type_object )
 		return;
 
-	if ( !current_user_can( $post_type_object->cap->edit_post, $post->ID ) )
+	if ( !current_user_can( 'edit_post', $post->ID ) )
 		return;
 
 	return apply_filters( 'get_edit_post_link', admin_url( sprintf($post_type_object->_edit_link . $action, $post->ID) ), $post->ID, $context );
@@ -960,7 +962,7 @@ function get_delete_post_link( $id = 0, $deprecated = '', $force_delete = false 
 	if ( !$post_type_object )
 		return;
 
-	if ( !current_user_can( $post_type_object->cap->delete_post, $post->ID ) )
+	if ( !current_user_can( 'delete_post', $post->ID ) )
 		return;
 
 	$action = ( $force_delete || !EMPTY_TRASH_DAYS ) ? 'delete' : 'trash';
@@ -1175,7 +1177,7 @@ function get_adjacent_post( $in_same_cat = false, $excluded_categories = '', $pr
 	$where = apply_filters( "get_{$adjacent}_post_where", $wpdb->prepare("WHERE p.post_date $op %s AND p.post_type = %s AND p.post_status = 'publish' $posts_in_ex_cats_sql", $current_post_date, $post->post_type), $in_same_cat, $excluded_categories );
 	$sort  = apply_filters( "get_{$adjacent}_post_sort", "ORDER BY p.post_date $order LIMIT 1" );
 
-	$query = "SELECT p.id FROM $wpdb->posts AS p $join $where $sort";
+	$query = "SELECT p.ID FROM $wpdb->posts AS p $join $where $sort";
 	$query_key = 'adjacent_post_' . md5($query);
 	$result = wp_cache_get($query_key, 'counts');
 	if ( false !== $result ) {
@@ -1218,16 +1220,15 @@ function get_adjacent_post_rel_link($title = '%title', $in_same_cat = false, $ex
 	if ( empty($post) )
 		return;
 
-	if ( empty($post->post_title) )
+	$post_title = the_title_attribute( array( 'echo' => false, 'post' => $post ) );
+
+	if ( empty( $post_title ) )
 		$post_title = $previous ? __('Previous Post') : __('Next Post');
-	else
-		$post_title = $post->post_title;
 
 	$date = mysql2date(get_option('date_format'), $post->post_date);
 
 	$title = str_replace('%title', $post_title, $title);
 	$title = str_replace('%date', $date, $title);
-	$title = apply_filters('the_title', $title, $post->ID);
 
 	$link = $previous ? "<link rel='prev' title='" : "<link rel='next' title='";
 	$link .= esc_attr( $title );
@@ -2019,10 +2020,11 @@ function get_admin_url( $blog_id = null, $path = '', $scheme = 'admin' ) {
  * @since 2.6.0
  *
  * @param string $path Optional. Path relative to the includes url.
+ * @param string $scheme Optional. Scheme to give the includes url context.
  * @return string Includes url link with optional path appended.
 */
-function includes_url($path = '') {
-	$url = site_url() . '/' . WPINC . '/';
+function includes_url( $path = '', $scheme = null ) {
+	$url = site_url( '/' . WPINC . '/', $scheme );
 
 	if ( $path && is_string( $path ) )
 		$url .= ltrim($path, '/');
@@ -2236,10 +2238,17 @@ function set_url_scheme( $url, $scheme = null ) {
 			$scheme = ( is_ssl() ? 'https' : 'http' );
 	}
 
-	if ( 'relative' == $scheme )
-		$url = preg_replace( '#^.+://[^/]*#', '', $url );
-	else
-		$url = preg_replace( '#^.+://#', $scheme . '://', $url );
+	$url = trim( $url );
+	if ( substr( $url, 0, 2 ) === '//' )
+		$url = 'http:' . $url;
+
+	if ( 'relative' == $scheme ) {
+		$url = ltrim( preg_replace( '#^\w+://[^/]*#', '', $url ) );
+		if ( $url !== '' && $url[0] === '/' )
+			$url = '/' . ltrim($url , "/ \t\n\r\0\x0B" );
+	} else {
+		$url = preg_replace( '#^\w+://#', $scheme . '://', $url );
+	}
 
 	return apply_filters( 'set_url_scheme', $url, $scheme, $orig_scheme );
 }

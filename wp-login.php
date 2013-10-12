@@ -48,7 +48,7 @@ function login_header($title = 'Log In', $message = '', $wp_error = '') {
 		$wp_error = new WP_Error();
 
 	// Shake it!
-	$shake_error_codes = array( 'interim_login_error', 'empty_password', 'empty_email', 'invalid_email', 'invalidcombo', 'empty_username', 'invalid_username', 'incorrect_password' );
+	$shake_error_codes = array( 'empty_password', 'empty_email', 'invalid_email', 'invalidcombo', 'empty_username', 'invalid_username', 'incorrect_password' );
 	$shake_error_codes = apply_filters( 'shake_error_codes', $shake_error_codes );
 
 	if ( $shake_error_codes && $wp_error->get_error_code() && in_array( $wp_error->get_error_code(), $shake_error_codes ) )
@@ -65,7 +65,7 @@ function login_header($title = 'Log In', $message = '', $wp_error = '') {
 	wp_admin_css( 'colors-fresh', true );
 
 	if ( wp_is_mobile() ) { ?>
-		<meta name="viewport" content="width=320; initial-scale=0.9; maximum-scale=1.0; user-scalable=0;" /><?php
+		<meta name="viewport" content="width=320, initial-scale=0.9, maximum-scale=1.0, user-scalable=0" /><?php
 	}
 
 	// Remove all stored post data on logging out.
@@ -97,8 +97,6 @@ function login_header($title = 'Log In', $message = '', $wp_error = '') {
 	if ( is_rtl() )
 		$classes[] = 'rtl';
 	if ( $interim_login ) {
-		// Don't allow interim logins to navigate away from the page.
-		$login_header_url = '#';
 		$classes[] = 'interim-login';
 		?>
 		<style type="text/css">html{background-color: transparent;}</style>
@@ -266,7 +264,7 @@ function retrieve_password() {
 	$message = apply_filters('retrieve_password_message', $message, $key);
 
 	if ( $message && !wp_mail($user_email, $title, $message) )
-		wp_die( __('The e-mail could not be sent.') . "<br />\n" . __('Possible reason: your host may have disabled the mail() function...') );
+		wp_die( __('The e-mail could not be sent.') . "<br />\n" . __('Possible reason: your host may have disabled the mail() function.') );
 
 	return true;
 }
@@ -356,7 +354,7 @@ function register_new_user( $user_login, $user_email ) {
 	$user_pass = wp_generate_password( 12, false);
 	$user_id = wp_create_user( $sanitized_user_login, $user_pass, $user_email );
 	if ( ! $user_id ) {
-		$errors->add( 'registerfail', sprintf( __( '<strong>ERROR</strong>: Couldn&#8217;t register you... please contact the <a href="mailto:%s">webmaster</a> !' ), get_option( 'admin_email' ) ) );
+		$errors->add( 'registerfail', sprintf( __( '<strong>ERROR</strong>: Couldn&#8217;t register you&hellip; please contact the <a href="mailto:%s">webmaster</a> !' ), get_option( 'admin_email' ) ) );
 		return $errors;
 	}
 
@@ -404,17 +402,16 @@ do_action( 'login_init' );
 do_action( 'login_form_' . $action );
 
 $http_post = ('POST' == $_SERVER['REQUEST_METHOD']);
+$interim_login = isset($_REQUEST['interim-login']);
+
 switch ($action) {
 
 case 'postpass' :
-	if ( empty( $wp_hasher ) ) {
-		require_once( ABSPATH . 'wp-includes/class-phpass.php' );
-		// By default, use the portable hash from phpass
-		$wp_hasher = new PasswordHash(8, true);
-	}
+	require_once ABSPATH . 'wp-includes/class-phpass.php';
+	$hasher = new PasswordHash( 8, true );
 
 	// 10 days
-	setcookie( 'wp-postpass_' . COOKIEHASH, $wp_hasher->HashPassword( wp_unslash( $_POST['post_password'] ) ), time() + 10 * DAY_IN_SECONDS, COOKIEPATH );
+	setcookie( 'wp-postpass_' . COOKIEHASH, $hasher->HashPassword( wp_unslash( $_POST['post_password'] ) ), time() + 10 * DAY_IN_SECONDS, COOKIEPATH );
 
 	wp_safe_redirect( wp_get_referer() );
 	exit();
@@ -503,7 +500,7 @@ case 'rp' :
 	login_header(__('Reset Password'), '<p class="message reset-pass">' . __('Enter your new password below.') . '</p>', $errors );
 
 ?>
-<form name="resetpassform" id="resetpassform" action="<?php echo esc_url( site_url( 'wp-login.php?action=resetpass&key=' . urlencode( $_GET['key'] ) . '&login=' . urlencode( $_GET['login'] ), 'login_post' ) ); ?>" method="post">
+<form name="resetpassform" id="resetpassform" action="<?php echo esc_url( site_url( 'wp-login.php?action=resetpass&key=' . urlencode( $_GET['key'] ) . '&login=' . urlencode( $_GET['login'] ), 'login_post' ) ); ?>" method="post" autocomplete="off">
 	<input type="hidden" id="user_login" value="<?php echo esc_attr( $_GET['login'] ); ?>" autocomplete="off" />
 
 	<p>
@@ -590,7 +587,6 @@ break;
 case 'login' :
 default:
 	$secure_cookie = '';
-	$interim_login = isset($_REQUEST['interim-login']);
 	$customize_login = isset( $_REQUEST['customize-login'] );
 	if ( $customize_login )
 		wp_enqueue_script( 'customize-base' );
@@ -663,19 +659,9 @@ default:
 	if ( isset($_POST['testcookie']) && empty($_COOKIE[TEST_COOKIE]) )
 		$errors->add('test_cookie', __("<strong>ERROR</strong>: Cookies are blocked or not supported by your browser. You must <a href='http://www.google.com/cookies.html'>enable cookies</a> to use WordPress."));
 
-	// Clear most errors if interim login
 	if ( $interim_login ) {
-		$error_code = $errors->get_error_code();
-		$errors = new WP_Error();
-
-		if ( $error_code ) {
-			if ( in_array( $error_code, array( 'empty_password', 'empty_username', 'invalid_username', 'incorrect_password' ) ) )
-				$errors->add('interim_login_error', __('<strong>ERROR</strong>: Invalid username or password.'));
-			else
-				$errors->add('interim_login_error_other', sprintf( __( '<strong>ERROR</strong>: Please contact the site administrator or try to <a href="%s" target="_blank">log in from a new window</a>.' ), wp_login_url() ) );
-		} else {
+		if ( ! $errors->get_error_code() )
 			$errors->add('expired', __('Session expired. Please log in again. You will not move away from this page.'), 'message');
-		}
 	} else {
 		// Some parts of this script use the main login form to display a message
 		if		( isset($_GET['loggedout']) && true == $_GET['loggedout'] )
@@ -691,6 +677,8 @@ default:
 		elseif ( strpos( $redirect_to, 'about.php?updated' ) )
 			$errors->add('updated', __( '<strong>You have successfully updated WordPress!</strong> Please log back in to experience the awesomeness.' ), 'message' );
 	}
+
+	$errors = apply_filters( 'wp_login_errors', $errors, $redirect_to );
 
 	// Clear any stale cookies.
 	if ( $reauth )
@@ -763,6 +751,17 @@ d.select();
 wp_attempt_focus();
 <?php } ?>
 if(typeof wpOnload=='function')wpOnload();
+<?php if ( $interim_login ) { ?>
+(function(){
+try {
+	var i, links = document.getElementsByTagName('a');
+	for ( i in links ) {
+		if ( links[i].href )
+			links[i].target = '_blank';
+	}
+} catch(e){}
+}());
+<?php } ?>
 </script>
 
 <?php

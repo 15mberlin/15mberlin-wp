@@ -69,14 +69,14 @@ function the_title($before = '', $after = '', $echo = true) {
  * @return string|null Null on failure or display. String when echo is false.
  */
 function the_title_attribute( $args = '' ) {
-	$title = get_the_title();
+	$defaults = array('before' => '', 'after' =>  '', 'echo' => true, 'post' => get_post() );
+	$r = wp_parse_args($args, $defaults);
+	extract( $r, EXTR_SKIP );
+
+	$title = get_the_title( $post );
 
 	if ( strlen($title) == 0 )
 		return;
-
-	$defaults = array('before' => '', 'after' =>  '', 'echo' => true);
-	$r = wp_parse_args($args, $defaults);
-	extract( $r, EXTR_SKIP );
 
 	$title = $before . $title . $after;
 	$title = esc_attr(strip_tags($title));
@@ -96,7 +96,7 @@ function the_title_attribute( $args = '' ) {
  *
  * @since 0.71
  *
- * @param mixed $post Optional. Post ID or object.
+ * @param int|object $post Optional. Post ID or object.
  * @return string
  */
 function get_the_title( $post = 0 ) {
@@ -161,9 +161,11 @@ function get_the_guid( $id = 0 ) {
  * @param string $more_link_text Optional. Content for when there is more text.
  * @param bool $strip_teaser Optional. Strip teaser content before the more text. Default is false.
  */
-function the_content( $more_link_text = null, $strip_teaser = false ) {
-	$content = apply_filters( 'the_content', get_the_content( $more_link_text, $strip_teaser ) );
-	echo str_replace( ']]>', ']]&gt;', $content );
+function the_content( $more_link_text = null, $strip_teaser = false) {
+	$content = get_the_content( $more_link_text, $strip_teaser );
+	$content = apply_filters( 'the_content', $content );
+	$content = str_replace( ']]>', ']]&gt;', $content );
+	echo $content;
 }
 
 /**
@@ -176,20 +178,19 @@ function the_content( $more_link_text = null, $strip_teaser = false ) {
  * @return string
  */
 function get_the_content( $more_link_text = null, $strip_teaser = false ) {
-	global $more, $page, $pages, $multipage, $preview;
+	global $page, $more, $preview, $pages, $multipage;
 
 	$post = get_post();
 
 	if ( null === $more_link_text )
-		$more_link_text = __( '(more...)' );
+		$more_link_text = __( '(more&hellip;)' );
 
 	$output = '';
 	$has_teaser = false;
-	$matches = array();
 
 	// If post password required and it doesn't match the cookie.
-	if ( post_password_required() )
-		return get_the_password_form();
+	if ( post_password_required( $post ) )
+		return get_the_password_form( $post );
 
 	if ( $page > count( $pages ) ) // if the requested page doesn't exist
 		$page = count( $pages ); // give them the highest numbered page that DOES exist
@@ -567,12 +568,10 @@ function get_body_class( $class = '' ) {
  *
  * @since 2.7.0
  *
- * @param int|object $post An optional post. Global $post used if not provided.
+ * @param int|WP_Post $post An optional post. Global $post used if not provided.
  * @return bool false if a password is not required or the correct password cookie is present, true otherwise.
  */
 function post_password_required( $post = null ) {
-	global $wp_hasher;
-
 	$post = get_post($post);
 
 	if ( empty( $post->post_password ) )
@@ -581,15 +580,14 @@ function post_password_required( $post = null ) {
 	if ( ! isset( $_COOKIE['wp-postpass_' . COOKIEHASH] ) )
 		return true;
 
-	if ( empty( $wp_hasher ) ) {
-		require_once( ABSPATH . 'wp-includes/class-phpass.php');
-		// By default, use the portable hash from phpass
-		$wp_hasher = new PasswordHash(8, true);
-	}
+	require_once ABSPATH . 'wp-includes/class-phpass.php';
+	$hasher = new PasswordHash( 8, true );
 
 	$hash = wp_unslash( $_COOKIE[ 'wp-postpass_' . COOKIEHASH ] );
+	if ( 0 !== strpos( $hash, '$P$B' ) )
+		return true;
 
-	return ! $wp_hasher->CheckPassword( $post->post_password, $hash );
+	return ! $hasher->CheckPassword( $post->post_password, $hash );
 }
 
 /**
@@ -1036,7 +1034,7 @@ class Walker_Page extends Walker {
 	 * @param int $current_page Page ID.
 	 * @param array $args
 	 */
-	function start_el( &$output, $page, $depth, $args, $current_page = 0 ) {
+	function start_el( &$output, $page, $depth = 0, $args = array(), $current_page = 0 ) {
 		if ( $depth )
 			$indent = str_repeat("\t", $depth);
 		else
@@ -1057,6 +1055,9 @@ class Walker_Page extends Walker {
 		}
 
 		$css_class = implode( ' ', apply_filters( 'page_css_class', $css_class, $page, $depth, $args, $current_page ) );
+
+		if ( '' === $page->post_title )
+			$page->post_title = sprintf( __( '#%d (no title)' ), $page->ID );
 
 		$output .= $indent . '<li class="' . $css_class . '"><a href="' . get_permalink($page->ID) . '">' . $link_before . apply_filters( 'the_title', $page->post_title, $page->ID ) . $link_after . '</a>';
 
@@ -1118,7 +1119,7 @@ class Walker_PageDropdown extends Walker {
 	 * @param array $args Uses 'selected' argument for selected page to set selected HTML attribute for option element.
 	 * @param int $id
 	 */
-	function start_el(&$output, $page, $depth, $args, $id = 0) {
+	function start_el( &$output, $page, $depth = 0, $args = array(), $id = 0 ) {
 		$pad = str_repeat('&nbsp;', $depth * 3);
 
 		$output .= "\t<option class=\"level-$depth\" value=\"$page->ID\"";
@@ -1226,11 +1227,11 @@ function prepend_attachment($content) {
  *
  * @since 1.0.0
  * @uses apply_filters() Calls 'the_password_form' filter on output.
- *
+ * @param int|WP_Post $post Optional. A post id or post object. Defaults to the current post when in The Loop, undefined otherwise.
  * @return string HTML content for password form for password protected post.
  */
-function get_the_password_form() {
-	$post = get_post();
+function get_the_password_form( $post = 0 ) {
+	$post = get_post( $post );
 	$label = 'pwbox-' . ( empty($post->ID) ? rand() : $post->ID );
 	$output = '<form action="' . esc_url( site_url( 'wp-login.php?action=postpass', 'login_post' ) ) . '" method="post">
 	<p>' . __("This post is password protected. To view it please enter your password below:") . '</p>
@@ -1251,7 +1252,7 @@ function get_the_password_form() {
  * @uses $wp_query
  *
  * @param string $template The specific template name if specific matching is required.
- * @return bool False on failure, true if success.
+ * @return bool True on success, false on failure.
  */
 function is_page_template( $template = '' ) {
 	if ( ! is_page() )
@@ -1276,13 +1277,13 @@ function is_page_template( $template = '' ) {
  *
  * @since 3.4.0
  *
- * @param int $post_id The page ID to check. Defaults to the current post, when used in the loop.
+ * @param int $post_id Optional. The page ID to check. Defaults to the current post, when used in the loop.
  * @return string|bool Page template filename. Returns an empty string when the default page template
  * 	is in use. Returns false if the post is not a page.
  */
 function get_page_template_slug( $post_id = null ) {
 	$post = get_post( $post_id );
-	if ( 'page' != $post->post_type )
+	if ( ! $post || 'page' != $post->post_type )
 		return false;
 	$template = get_post_meta( $post->ID, '_wp_page_template', true );
 	if ( ! $template || 'default' == $template )
@@ -1313,9 +1314,9 @@ function wp_post_revision_title( $revision, $link = true ) {
 	/* translators: revision date format, see http://php.net/date */
 	$datef = _x( 'j F, Y @ G:i', 'revision date format');
 	/* translators: 1: date */
-	$autosavef = __( '%1$s [Autosave]' );
+	$autosavef = _x( '%1$s [Autosave]', 'post revision title extra' );
 	/* translators: 1: date */
-	$currentf  = __( '%1$s [Current Revision]' );
+	$currentf  = _x( '%1$s [Current Revision]', 'post revision title extra' );
 
 	$date = date_i18n( $datef, strtotime( $revision->post_modified ) );
 	if ( $link && current_user_can( 'edit_post', $revision->ID ) && $link = get_edit_post_link( $revision->ID ) )
@@ -1385,131 +1386,47 @@ function wp_post_revision_title_expanded( $revision, $link = true ) {
  * Can output either a UL with edit links or a TABLE with diff interface, and
  * restore action links.
  *
- * Second argument controls parameters:
- *   (bool)   parent : include the parent (the "Current Revision") in the list.
- *                     Deprecated (ignored), since 3.6 the revisions always include
- *                     a copy of the current post.
- *   (string) format : 'list' or 'form-table'. 'list' outputs UL, 'form-table'
- *                     outputs TABLE with UI.
- *   (int)    right  : what revision is currently being viewed - used in
- *                     form-table format.
- *   (int)    left   : what revision is currently being diffed against right -
- *                     used in form-table format.
- *
  * @package WordPress
  * @subpackage Post_Revisions
  * @since 2.6.0
  *
  * @uses wp_get_post_revisions()
- * @uses wp_post_revision_title()
+ * @uses wp_post_revision_title_expanded()
  * @uses get_edit_post_link()
  * @uses get_the_author_meta()
  *
- * @todo split into two functions (list, form-table) ?
- *
  * @param int|object $post_id Post ID or post object.
- * @param string|array $args See description {@link wp_parse_args()}.
+ * @param string $type 'all' (default), 'revision' or 'autosave'
  * @return null
  */
-function wp_list_post_revisions( $post_id = 0, $args = null ) {
-	if ( !$post = get_post( $post_id ) )
+function wp_list_post_revisions( $post_id = 0, $type = 'all' ) {
+	if ( ! $post = get_post( $post_id ) )
 		return;
 
-	$defaults = array( 'right' => false, 'left' => false, 'format' => 'list', 'type' => 'all' );
-	extract( wp_parse_args( $args, $defaults ), EXTR_SKIP );
+	// $args array with (parent, format, right, left, type) deprecated since 3.6
+	if ( is_array( $type ) ) {
+		$type = ! empty( $type['type'] ) ? $type['type']  : $type;
+		_deprecated_argument( __FUNCTION__, '3.6' );
+	}
 
-	if ( !$revisions = wp_get_post_revisions( $post->ID ) )
+	if ( ! $revisions = wp_get_post_revisions( $post->ID ) )
 		return;
 
-	/* translators: post revision: 1: when, 2: author name */
-	$titlef = _x( '%1$s', 'post revision' );
-
-	$rows = $right_checked = '';
-	$class = false;
-	$can_edit_post = current_user_can( 'edit_post', $post->ID );
+	$rows = '';
 	foreach ( $revisions as $revision ) {
-		if ( !current_user_can( 'read_post', $revision->ID ) )
+		if ( ! current_user_can( 'read_post', $revision->ID ) )
 			continue;
 
 		$is_autosave = wp_is_post_autosave( $revision );
 		if ( ( 'revision' === $type && $is_autosave ) || ( 'autosave' === $type && ! $is_autosave ) )
 			continue;
 
-		$date = wp_post_revision_title_expanded( $revision );
-
-		$title = sprintf( $titlef, $date );
-		$rows .= "\t<li>$title</li>\n";
-
+		$rows .= "\t<li>" . wp_post_revision_title_expanded( $revision ) . "</li>\n";
 	}
 
-	if ( 'form-table' == $format ) : ?>
+	echo "<div class='hide-if-js'><p>" . __( 'JavaScript must be enabled to use this feature.' ) . "</p></div>\n";
 
-<form action="revision.php" method="get">
-
-<div class="tablenav">
-	<div class="alignleft">
-		<input type="submit" class="button-secondary" value="<?php esc_attr_e( 'Compare Revisions' ); ?>" />
-		<input type="hidden" name="action" value="diff" />
-		<input type="hidden" name="post_type" value="<?php echo esc_attr($post->post_type); ?>" />
-	</div>
-</div>
-
-<br class="clear" />
-
-<table class="widefat post-revisions" cellspacing="0" id="post-revisions">
-	<col />
-	<col />
-	<col style="width: 33%" />
-	<col style="width: 33%" />
-	<col style="width: 33%" />
-<thead>
-<tr>
-	<th scope="col"><?php /* translators: column name in revisions */ _ex( 'Old', 'revisions column name' ); ?></th>
-	<th scope="col"><?php /* translators: column name in revisions */ _ex( 'New', 'revisions column name' ); ?></th>
-	<th scope="col"><?php /* translators: column name in revisions */ _ex( 'Date Created', 'revisions column name' ); ?></th>
-	<th scope="col"><?php _e( 'Author' ); ?></th>
-	<th scope="col" class="action-links"><?php _e( 'Actions' ); ?></th>
-</tr>
-</thead>
-<tbody>
-
-<?php echo $rows; ?>
-
-</tbody>
-</table>
-
-</form>
-
-<?php
-	else :
-		echo "<ul class='post-revisions'>\n";
-		echo $rows;
-
-		//
-		// if the post was previously restored from a revision
-		// show the restore event details
-		//
-		if ( $restored_from_meta = get_post_meta( $post->ID, '_post_restored_from', true ) ) {
-			$author = get_the_author_meta( 'display_name', $restored_from_meta[ 'restored_by_user' ] );
-			/* translators: revision date format, see http://php.net/date */
-			$datef = _x( 'j F, Y @ G:i:s', 'revision date format');
-			$date = date_i18n( $datef, strtotime( $restored_from_meta[ 'restored_time' ] ) );
-			$timesince = human_time_diff( $restored_from_meta[ 'restored_time' ], current_time( 'timestamp' ) ) ;
-			?>
-			<hr />
-			<div id="revisions-meta-restored">
-				<?php
-				/* translators: restored revision details: 1: revision ID, 2: time ago, 3: author name, 4: date */
-				printf( _x( 'Previously restored from revision ID %1$d, %2$s ago by %3$s (%4$s)', 'restored revision details' ),
-				$restored_from_meta[ 'restored_revision_id'],
-				$timesince,
-				$author,
-				$date );
-				?>
-			</div>
-			<?php
-		echo "</ul>";
-		}
-
-	endif;
+	echo "<ul class='post-revisions hide-if-no-js'>\n";
+	echo $rows;
+	echo "</ul>";
 }

@@ -164,6 +164,7 @@ textarea.disabled {
 	color: #fff;
 }
 
+.revisions-meta,
 .widget .widget-top,
 .postbox h3,
 .stuffbox h3,
@@ -1457,10 +1458,15 @@ div.wp-menu-image {
 
 /* end screen icons */
 
+/* Post format icons */
+
+.post-format-icon {
+	background: url(../images/post-formats-vs.png) no-repeat;
+}
+
 /* Diff */
 table.diff .diff-deletedline {
-	background-color: #fdd;
-	text-decoration: line-through;
+	background-color: #ffe9e9;
 }
 
 table.diff .diff-deletedline del {
@@ -1468,65 +1474,65 @@ table.diff .diff-deletedline del {
 }
 
 table.diff .diff-addedline {
-	background-color: #dfd;
+	background-color: #e9ffe9;
 }
 
 table.diff .diff-addedline ins {
 	background-color: #afa;
 }
 
-.diff-header {
-	background-color: #f7f7f7;
+.revisions-meta {
+	border: 1px solid #d1e5ee;
 }
 
-#diff-title-to strong {
-	color: #0080aa;
+.revisions-controls {
+	background: #fff;
+	background: -webkit-gradient(linear, left bottom, left top, color-stop(0%,rgba(255,255,255,1)), color-stop(30px,rgba(255,255,255,1)), color-stop(100%,rgba(255,255,255,1)));
+	background: -webkit-linear-gradient(bottom, rgba(255,255,255,0) 0%, rgba(255,255,255,1) 30px, rgba(255,255,255,1) 100%);
+	background:    -moz-linear-gradient(bottom, rgba(255,255,255,0) 0%,rgba(255,255,255,1) 30px, rgba(255,255,255,1) 100%);
+	background:      -o-linear-gradient(bottom, rgba(255,255,255,0) 0%, rgba(255,255,255,1) 30px, rgba(255,255,255,1) 100%);
+	background: linear-gradient(to top, rgba(255,255,255,0) 0%, rgba(255,255,255,1) 30px, rgba(255,255,255,1) 100%);
 }
 
-.revision-tick.completed-false {
-	background-color: #99c;
-	background: url(../images/wpspin_light.gif) no-repeat;
-	background-position: middle;
-	background-size: 1px 10px;
+.revisions-tooltip,
+.revisions-tooltip-arrow span {
+	border-color: #d1e5ee;
+	background-color: #fff;
 }
 
-.revision-tick.completed-true {
-	background-color: #d1e5ee;
-}
-
-.diff-label {
-	color: #666;
+.revisions-tickmarks > div {
+	border-color: #d1e5ee;
 }
 
 /* jQuery UI Slider */
 .wp-slider.ui-slider {
 	border-color: #d1e5ee;
-	background: #eff8ff;
 }
 
 .wp-slider .ui-slider-handle {
-	border-color: #acd;
-	background: #f4f9fc;
-	background-image: -webkit-gradient(linear, left bottom, left top, from(#f4f9fc), to(#fff));
-	background-image: -webkit-linear-gradient(bottom, #f4f9fc, #fff);
-	background-image:    -moz-linear-gradient(bottom, #f4f9fc, #fff);
-	background-image:      -o-linear-gradient(bottom, #f4f9fc, #fff);
-	background-image: linear-gradient(to top, #f4f9fc, #fff);
+	color: #333;
+	border-color: none;
+}
+
+.wp-slider .ui-slider-handle {
+	border-color: #d0dfe9;
+	background: #eff8ff;
+	background-image: -webkit-gradient(linear, left bottom, left top, from(#eff8ff), to(#fff));
+	background-image: -webkit-linear-gradient(bottom, #eff8ff, #fff);
+	background-image:    -moz-linear-gradient(bottom, #eff8ff, #fff);
+	background-image:      -o-linear-gradient(bottom, #eff8ff, #fff);
+	background-image: linear-gradient(to top, #eff8ff, #fff);
+}
+
+.wp-slider .ui-slider-handle:hover,
+.wp-slider .ui-slider-handle:focus {
+	border-color: #a0c3d5;
 }
 
 .wp-slider .ui-slider-handle.ui-state-hover,
 .wp-slider .ui-slider-handle.ui-state-focus {
-	border-color: #79afca;
-}
-
-.wp-slider .ui-slider-handle.ui-state-active {
-	border-color: #79afca;
-	background: #eff8ff;
-	background-image: -webkit-gradient(linear, left bottom, left top, from(#fff), to(#f4f9fc));
-	background-image: -webkit-linear-gradient(bottom, #fff, #f4f9fc);
-	background-image:    -moz-linear-gradient(bottom, #fff, #f4f9fc);
-	background-image:      -o-linear-gradient(bottom, #fff, #f4f9fc);
-	background-image: linear-gradient(to top, #fff, #f4f9fc);
+	border-color: #a0c3d5;
+	outline: none;
 }
 
 /* edit image */
@@ -2242,6 +2248,12 @@ h2.nav-tab-wrapper, h3.nav-tab-wrapper {
 	#header-logo {
 		background-image: url('../images/wp-logo-vs-2x.png?ver=20120916');
 		background-size: 16px auto;
+	}
+
+	/* 16px post formats */
+	.post-format-icon {
+		background-image: url(../images/post-formats32-vs.png);
+		background-size: 16px 304px;
 	}
 
 }

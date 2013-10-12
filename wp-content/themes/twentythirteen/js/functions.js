@@ -5,68 +5,23 @@
  */
 
 ( function( $ ) {
-	var html               = $( 'html' ),
-	    body               = $( 'body' ),
-	    navbar             = $( '#navbar' ),
-	    _window            = $( window ),
-	    toolbarOffset      = body.is( '.admin-bar' ) ? 28 : 0,
-	    navbarOffset       = navbar.offset().top - toolbarOffset,
-	    scrollOffsetMethod = ( typeof window.scrollY === 'undefined' ),
-	    adjustFooter,
-	    adjustAnchor;
+	var body    = $( 'body' ),
+	    _window = $( window );
 
 	/**
-	 * Adds a top margin to the footer if the sidebar widget area is
-	 * higher than the rest of the page, to help the footer always
-	 * visually clear the sidebar.
+	 * Adds a top margin to the footer if the sidebar widget area is higher
+	 * than the rest of the page, to help the footer always visually clear
+	 * the sidebar.
 	 */
-	adjustFooter = function() {
-		var sidebar   = $( '#secondary .widget-area' ),
-		    secondary = ( 0 == sidebar.length ) ? -40 : sidebar.height(),
-		    margin    = $( '#tertiary .widget-area' ).height() - $( '#content' ).height() - secondary;
-
-		if ( margin > 0 && _window.innerWidth() > 999 )
-			$( '#colophon' ).css( 'margin-top', margin + 'px' );
-	};
-
-	/**
-	 * Repositions the window on jump-to-anchor to account for navbar
-	 * height.
-	 */
-	adjustAnchor = function() {
-		if ( window.location.hash )
-			window.scrollBy( 0, -49 );
-	};
-
 	$( function() {
-		adjustAnchor();
+		if ( body.is( '.sidebar' ) ) {
+			var sidebar   = $( '#secondary .widget-area' ),
+			    secondary = ( 0 == sidebar.length ) ? -40 : sidebar.height(),
+			    margin    = $( '#tertiary .widget-area' ).height() - $( '#content' ).height() - secondary;
 
-		if ( body.is( '.sidebar' ) )
-			adjustFooter();
-	} );
-	_window.on( 'hashchange.twentythirteen', adjustAnchor );
-
-	/**
-	 * Displays the fixed navbar based on screen position.
-	 */
-	if ( _window.innerWidth() > 644 ) {
-		_window.on( 'scroll.twentythirteen', function() {
-			var scrollOffset = scrollOffsetMethod ? document.documentElement.scrollTop : window.scrollY;
-
-			if ( scrollOffset > navbarOffset )
-				html.addClass( 'navbar-fixed' );
-			else
-				html.removeClass( 'navbar-fixed' );
-		} );
-	}
-
-	/**
-	 * Allows clicking the navbar to scroll to top.
-	 */
-	navbar.on( 'click.twentythirteen', function( event ) {
-		// Ensure that the navbar element was the target of the click.
-		if ( 'navbar' == event.target.id  || 'site-navigation' == event.target.id )
-			$( 'html, body' ).animate( { scrollTop: 0 }, 'fast' );
+			if ( margin > 0 && _window.innerWidth() > 999 )
+				$( '#colophon' ).css( 'margin-top', margin + 'px' );
+		}
 	} );
 
 	/**
@@ -78,11 +33,11 @@
 			return;
 
 		button = nav.find( '.menu-toggle' );
-		menu   = nav.find( '.nav-menu' );
 		if ( ! button )
 			return;
 
 		// Hide button if menu is missing or empty.
+		menu = nav.find( '.nav-menu' );
 		if ( ! menu || ! menu.children().length ) {
 			button.hide();
 			return;
