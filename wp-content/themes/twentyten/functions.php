@@ -200,7 +200,7 @@ if ( ! function_exists( 'twentyten_admin_header_style' ) ) :
  */
 function twentyten_admin_header_style() {
 ?>
-<style type="text/css" id="twentyten-header-css">
+<style type="text/css" id="twentyten-admin-header-css">
 /* Shows the same border as on front end */
 #headimg {
 	border-bottom: 1px solid #000;
@@ -528,8 +528,8 @@ endif;
 function twentyten_get_gallery_images() {
 	$images = array();
 
-	if ( function_exists( 'get_post_gallery_images' ) ) {
-		$galleries = get_post_galleries();
+	if ( function_exists( 'get_post_galleries' ) ) {
+		$galleries = get_post_galleries( get_the_ID(), false );
 		if ( isset( $galleries[0]['ids'] ) )
 		 	$images = explode( ',', $galleries[0]['ids'] );
 	} else {
