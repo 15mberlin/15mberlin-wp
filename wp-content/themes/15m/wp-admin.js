@@ -1,0 +1,1 @@
+//orientado a meter javascript en el admin de posts
