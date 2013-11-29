@@ -1,78 +1,113 @@
 //admin functions
+
+
 window.onload = function () {
-	//truco hacky para convertir el check de las categorias en radio buttons...
-	checkToRadio();
-	hideBox();
-	
-	var mapaBox = document.getElementById("map-canvas-asamblea");
-	//===== BACK END =====
-	//mirar si hay mapa
-	if (mapaBox) {
+	//compruebo si estoy en admin o no...
+	if(document.getElementById("asamblea")) { //esta id sólo existe en admin-post.php
 		
-		//console.log(mapaBox.length);
+		//funciones para ocultar y ordenar boxes según categoría marcada
+		checkToRadio();
+		hideBox();
 		
-		//centrar mapa según back end - procesa entrada
-		var mapData = document.getElementById("map-canvas-asamblea").getAttribute("data-map");
-		var numStart = mapData.indexOf("ll=") + 3; //+4 para que coja lo que viene despues...
-		var numEnd = mapData.indexOf("&spn"); // +0 para que se quede donde esta
 		
-		mapData = mapData.substring(numStart, numEnd); //tomamos los datos que nos importan
+		//inicializamos ahora todos los calculos de mapas
 		
-		mapData = String.split(mapData,",");
-		for (var i = 0; i < mapData.length; i++) {
-			mapData[i] = parseFloat (mapData[i]);
+		//hasta ahora las categorías que tomamos
+		var types = ["asamblea", "gtrabajo", "mani"]; 
+		
+		
+		//pillo los frames mapas
+		var mapaBox = [];
+		var mapData = [];
+		
+		for (var i = 0; i < types.length; i++) {
+			
+			mapaBox[i] = document.getElementById("map-canvas-" + types[i]);
+			
+			//centrar mapa según back end - procesa entrada
+		
+			mapData[i] = mapaBox[i].getAttribute("data-map");
+			
+			var numStart = mapData[i].indexOf("ll=") + 3; //+4 para que coja lo que viene despues...
+			var numEnd = mapData[i].indexOf("&spn"); // +0 para que se quede donde esta
+			
+			mapData[i] = mapData[i].substring(numStart, numEnd); //tomamos los datos que nos importan
+			
+			mapData[i] = String.split(mapData[i],",");
+			for (var j = 0; j < mapData[i].length; j++) {
+				mapData[i][j] = parseFloat (mapData[i][j]);
+			}
 		}
+		console.log(mapData);
 	
-		//inicializar mapa según datos backend
-		var map = maps_init(mapData);
+		//inicializar mapas según datos backend
+		var map = maps_init(mapData, types);
 		
 		//modifica campo lugar al draggear el mapa, para hacer entrada dinámica
-		google.maps.event.addListener(map, "dragend", function () {
-		
-			var campo = document.getElementById("asamblea-mapa").value;
-			var campoStart = campo.indexOf("ll=") + 3;
-			var campoEnd = campo.indexOf("&spn");	
-			
-			var x = this.getCenter().ob;
-			var y = this.getCenter().pb;
-			var stringPlace = x + ", " + y;
-			
-			campo = campo.replace(campo.substring(numStart, numEnd), stringPlace);
-			document.getElementById("asamblea-mapa").value = campo;
-			
-			//guardar datos en database
-			document.getElementById("asamblea-mapa-x").value = x;
-			document.getElementById("asamblea-mapa-y").value = y;
-	
-		});
+		for (var i = 0; i < map.length; i++) {
+			google.maps.event.addListener(map[i], "dragend", mapDrag, types[i]);
+		}
 	}
-}
+};
+
+
+
 
 //function del API del google maps
-var maps_init = function (data) {
-  var types = ["asamblea", "gtrabajo", "mani"];
-  var myLatlng = new google.maps.LatLng(data[0], data[1]);
-  var mapOptions = {
-    zoom: 16,
-    center: myLatlng,
-    mapTypeId: google.maps.MapTypeId.ROADMAP,
-    zoomControl : false,
-    noClear: true
-  };
-  
-  var name = [];
-  for (var i = 0; i < types.length; i++) {
-	var name = "map-canvas-" + types[i];  
-  	var map = new google.maps.Map(document.getElementById(name), mapOptions); 	
-  }
-  
-  var marker = new google.maps.Marker({
-      position: myLatlng,
-      map: map,
-      title: 'Asamblea aquí!'
-  });
-  return map;
+var maps_init = function (data,types) {
+	
+	var _baiz = [52.528376, 13.410015];
+	var myLatlng = [], name = [], map = []; //cargo las var, que si no se enfadan
+	
+	for (var i = 0; i < types.length; i++) {
+		
+		//si no hay datos guardados es NaN y no se produce el mapa lo pongo en el Baiz
+		if (isNaN(data[i][0]) || isNaN(data[i][1])) {
+			data[i][0] = _baiz[0];
+			data[i][1] = _baiz[1];
+		}
+		myLatlng[i] = new google.maps.LatLng(data[i][0], data[i][1]);
+		var mapOptions = {
+			zoom: 16,
+			center: myLatlng[i],
+			mapTypeId: google.maps.MapTypeId.ROADMAP,
+			zoomControl : false,
+			noClear: true
+		};
+		
+		name[i] = "map-canvas-" + types[i];  
+		map[i] = new google.maps.Map(document.getElementById(name[i]), mapOptions); 	
+				
+	}
+	return map;
+	
 };
+
+var mapDrag = function (types) {
+
+	var selfId = this.b.getAttribute("id"); 
+	//para no volver a hacer un for loop, hago algo un poco triki...
+	var selfId_name = selfId.replace("map-canvas-", "");
+	
+	
+	
+	var campo = document.getElementById(selfId_name + "-mapa").value;
+	var campoStart = campo.indexOf("ll=") + 3;
+	var campoEnd = campo.indexOf("&spn");	
+	
+	var x = this.getCenter().ob; //API maps
+	var y = this.getCenter().pb; //API maps
+	var stringPlace = x + ", " + y;
+	
+	campo = campo.replace(campo.substring(campoStart, campoEnd), stringPlace);
+	document.getElementById(selfId_name + "-mapa").value = campo;
+	
+	//guardar datos en database
+	document.getElementById(selfId_name + "-mapa-x").value = x;
+	document.getElementById(selfId_name + "-mapa-y").value = y;
+	
+	console.log ("He draggeado " + selfId);				
+}
 
 var checkToRadio = function () {
 	var checkbox = document.querySelectorAll("[id^='in-category-'][type = 'checkbox']");
