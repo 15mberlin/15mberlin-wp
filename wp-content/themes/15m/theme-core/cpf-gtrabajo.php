@@ -75,7 +75,7 @@ function show_box_gtrabajo () {
 				<br/><span class="description">'. $gtrabajo_post_fields[0]["desc"] .'</span>
 			</td>
 			<td width="400" height="218" rowspan="4" >
-				<div id="map-canvas-gtrabajo" style="width:100%; height:100%" data-map="' . get_post_meta($post->ID, $gtrabajo_post_fields[3]["id"],true) . '"> </div>
+				<div id="map-canvas-gtrabajo" style="width:100%; height:100%" data-map="' . get_post_meta($post->ID, $gtrabajo_post_fields[4]["id"],true) . '"> </div>
 			</td>
 		</tr>
 		<tr>

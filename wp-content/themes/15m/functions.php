@@ -1,10 +1,11 @@
 <?php
 
 include_once ("theme-core/enqueue-scripts.php");
-include_once ("theme-core/cpf-asamblea.php");
-include_once ("theme-core/cpf-gtrabajo.php");
-include_once ("theme-core/cpf-mani.php");
+//include_once ("theme-core/cpf-asamblea.php");
+//include_once ("theme-core/cpf-gtrabajo.php");
+//include_once ("theme-core/cpf-mani.php");
 include_once ("theme-core/images.php");
+include_once ("theme-core/candela-chacho.php");
 
 
 //Controlar el excerpt

@@ -68,7 +68,7 @@ function show_box_asamblea () {
 				<input type="'. $asamblea_post_fields[0]["type"] .'" id="'. $asamblea_post_fields[0]["id"] .'" value="'. get_post_meta($post->ID, $asamblea_post_fields[0]["id"], true) .'" name="'. $asamblea_post_fields[0]["id"] .'"/>
 				<br/><span class="description">'. $asamblea_post_fields[0]["desc"] .'</span>
 			</td>
-			<td width="400" height="218" rowspan="4" >
+			<td width="400" height="218" rowspan="4">
 				<div id="map-canvas-asamblea" style="width:100%; height:100%" data-map="' . get_post_meta($post->ID, $asamblea_post_fields[3]["id"],true) . '"> </div>
 			</td>
 		</tr>
