@@ -301,11 +301,25 @@ foreach ( $columns as $column_name => $column_display_name ) {
 		break;
 
 	case 'parent':
+<<<<<<< HEAD
 		if ( $post->post_parent > 0 && get_post( $post->post_parent ) ) {
 			$title = _draft_or_post_title( $post->post_parent );
 ?>
 			<td <?php echo $attributes ?>><strong>
 				<?php if ( current_user_can( 'edit_post', $post->post_parent ) ) { ?>
+=======
+		if ( $post->post_parent > 0 )
+			$parent = get_post( $post->post_parent );
+		else
+			$parent = false;
+
+		if ( $parent ) {
+			$title = _draft_or_post_title( $post->post_parent );
+			$parent_type = get_post_type_object( $parent->post_type );
+?>
+			<td <?php echo $attributes ?>><strong>
+				<?php if ( current_user_can( 'edit_post', $post->post_parent ) && $parent_type->show_ui ) { ?>
+>>>>>>> wordpress/3.8-branch
 					<a href="<?php echo get_edit_post_link( $post->post_parent ); ?>">
 						<?php echo $title ?></a><?php
 				} else {

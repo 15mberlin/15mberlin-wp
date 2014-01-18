@@ -1,13 +1,26 @@
 <?php
 /**
- * Revisions administration panel.
+ * Revisions administration panel
+ *
+ * Requires wp-admin/includes/revision.php.
  *
  * @package WordPress
  * @subpackage Administration
+ * @since 2.6.0
+ *
+ * @param int    revision Optional. The revision ID.
+ * @param string action   The action to take.
+ *                        Accepts 'restore', 'view' or 'edit'.
+ * @param int    from     The revision to compare from.
+ * @param int    to       Optional, required if revision missing. The revision to compare to.
  */
 
 /** WordPress Administration Bootstrap */
+<<<<<<< HEAD
 require_once('./admin.php');
+=======
+require_once( dirname( __FILE__ ) . '/admin.php' );
+>>>>>>> wordpress/3.8-branch
 
 require ABSPATH . 'wp-admin/includes/revision.php';
 
@@ -90,6 +103,7 @@ wp_enqueue_script( 'revisions' );
 wp_localize_script( 'revisions', '_wpRevisionsSettings', wp_prepare_revisions_for_js( $post, $revision_id, $from ) );
 
 /* Revisions Help Tab */
+<<<<<<< HEAD
 
 $revisions_overview  = '<p>' . __( 'This screen is used for managing your content revisions.' ) . '</p>';
 $revisions_overview .= '<p>' . __( 'Revisions are saved copies of your post or page, which are periodically created as you update your content. The red text on the left shows the content that was removed. The green text on the right shows the content that was added.' ) . '</p>';
@@ -109,13 +123,37 @@ $revisions_sidebar .= '<p>' . __( '<a href="http://codex.wordpress.org/Revision_
 $revisions_sidebar .= '<p>' . __( '<a href="http://wordpress.org/support/" target="_blank">Support Forums</a>' ) . '</p>';
 
 get_current_screen()->set_help_sidebar( $revisions_sidebar );
+=======
 
-require_once( './admin-header.php' );
+$revisions_overview  = '<p>' . __( 'This screen is used for managing your content revisions.' ) . '</p>';
+$revisions_overview .= '<p>' . __( 'Revisions are saved copies of your post or page, which are periodically created as you update your content. The red text on the left shows the content that was removed. The green text on the right shows the content that was added.' ) . '</p>';
+$revisions_overview .= '<p>' . __( 'From this screen you can review, compare, and restore revisions:' ) . '</p>';
+$revisions_overview .= '<ul><li>' . __( 'To navigate between revisions, <strong>drag the slider handle left or right</strong> or <strong>use the Previous or Next buttons</strong>.' ) . '</li>';
+$revisions_overview .= '<li>' . __( 'Compare two different revisions by <strong>selecting the &#8220;Compare any two revisions&#8221; box</strong> to the side.' ) . '</li>';
+$revisions_overview .= '<li>' . __( 'To restore a revision, <strong>click Restore This Revision</strong>.' ) . '</li></ul>';
+
+get_current_screen()->add_help_tab( array(
+	'id'      => 'revisions-overview',
+	'title'   => __( 'Overview' ),
+	'content' => $revisions_overview
+) );
+
+$revisions_sidebar  = '<p><strong>' . __( 'For more information:' ) . '</strong></p>';
+$revisions_sidebar .= '<p>' . __( '<a href="http://codex.wordpress.org/Revision_Management" target="_blank">Revisions Management</a>' ) . '</p>';
+$revisions_sidebar .= '<p>' . __( '<a href="http://wordpress.org/support/" target="_blank">Support Forums</a>' ) . '</p>';
+>>>>>>> wordpress/3.8-branch
+
+get_current_screen()->set_help_sidebar( $revisions_sidebar );
+
+require_once( ABSPATH . 'wp-admin/admin-header.php' );
 
 ?>
 
 <div class="wrap">
+<<<<<<< HEAD
 	<?php screen_icon(); ?>
+=======
+>>>>>>> wordpress/3.8-branch
 	<h2 class="long-header"><?php echo $h2; ?></h2>
 </div>
 
@@ -207,4 +245,4 @@ require_once( './admin-header.php' );
 
 
 <?php
-require_once( './admin-footer.php' );
+require_once( ABSPATH . 'wp-admin/admin-footer.php' );

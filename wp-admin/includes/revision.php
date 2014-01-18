@@ -1,6 +1,10 @@
 <?php
 /**
+<<<<<<< HEAD
  * WordPress Administration Revisions API.
+=======
+ * WordPress Administration Revisions API
+>>>>>>> wordpress/3.8-branch
  *
  * @package WordPress
  * @subpackage Administration
@@ -11,12 +15,21 @@
  *
  * @since 3.6.0
  *
+<<<<<<< HEAD
  * @param object $post The post object.
  * @param int $compare_from The revision id to compare from.
  * @param int $compare_to The revision id to come to.
  *
  * @return array|bool Associative array of a post's revisioned fields and their diffs.
  * 	Or, false on failure.
+=======
+ * @param object|int $post         The post object. Also accepts a post ID.
+ * @param int        $compare_from The revision ID to compare from.
+ * @param int        $compare_to   The revision ID to come to.
+ *
+ * @return array|bool Associative array of a post's revisioned fields and their diffs.
+ *                    Or, false on failure.
+>>>>>>> wordpress/3.8-branch
  */
 function wp_get_revision_ui_diff( $post, $compare_from, $compare_to ) {
 	if ( ! $post = get_post( $post ) )
@@ -55,7 +68,26 @@ function wp_get_revision_ui_diff( $post, $compare_from, $compare_to ) {
 	$return = array();
 
 	foreach ( _wp_post_revision_fields() as $field => $name ) {
+<<<<<<< HEAD
 		$content_from = $compare_from ? apply_filters( "_wp_post_revision_field_$field", $compare_from->$field, $field, $compare_from, 'from' ) : '';
+=======
+		/**
+		 * Contextually filter a post revision field.
+		 *
+		 * The dynamic portion of the hook name, $field, corresponds to each of the post
+		 * fields of the revision object being iterated over in a foreach statement.
+		 *
+		 * @since 3.6.0
+		 *
+		 * @param string  $compare_from->$field The current revision field to compare to or from.
+		 * @param string  $field                The current revision field.
+		 * @param WP_Post $compare_from         The revision post object to compare to or from.
+		 * @param string  null                  The context of whether the current revision is the old or the new one. Values are 'to' or 'from'.
+		 */
+		$content_from = $compare_from ? apply_filters( "_wp_post_revision_field_$field", $compare_from->$field, $field, $compare_from, 'from' ) : '';
+
+		/** This filter is documented in wp-admin/includes/revision.php */
+>>>>>>> wordpress/3.8-branch
 		$content_to = apply_filters( "_wp_post_revision_field_$field", $compare_to->$field, $field, $compare_to, 'to' );
 
 		$diff = wp_text_diff( $content_from, $content_to, array( 'show_split_view' => true ) );
@@ -85,9 +117,15 @@ function wp_get_revision_ui_diff( $post, $compare_from, $compare_to ) {
  *
  * @since 3.6.0
  *
+<<<<<<< HEAD
  * @param object $post The post object.
  * @param int $selected_revision_id The selected revision id.
  * @param int $from (optional) The revision id to compare from.
+=======
+ * @param object|int $post                 The post object. Also accepts a post ID.
+ * @param int        $selected_revision_id The selected revision ID.
+ * @param int        $from                 Optional. The revision ID to compare from.
+>>>>>>> wordpress/3.8-branch
  *
  * @return array An associative array of revision data and related settings.
  */

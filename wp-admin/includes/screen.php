@@ -125,6 +125,7 @@ function add_screen_option( $option, $args = array() ) {
 }
 
 /**
+<<<<<<< HEAD
  * Displays a screen icon.
  *
  * @uses get_screen_icon()
@@ -172,6 +173,8 @@ function get_screen_icon( $screen = '' ) {
 }
 
 /**
+=======
+>>>>>>> wordpress/3.8-branch
  * Get the current screen object
  *
  * @since 3.1.0
@@ -616,6 +619,37 @@ final class WP_Screen {
 	 */
 	public function add_option( $option, $args = array() ) {
 		$this->_options[ $option ] = $args;
+	}
+
+	/**
+	 * Remove an option from the screen.
+	 *
+	 * @since 3.8.0
+	 *
+	 * @param string $option Option ID.
+	 */
+	public function remove_option( $option ) {
+		unset( $this->_options[ $option ] );
+	}
+
+	/**
+	 * Remove all options from the screen.
+	 *
+	 * @since 3.8.0
+	 */
+	public function remove_options() {
+		$this->_options = array();
+	}
+
+	/**
+	 * Get the options registered for the screen.
+	 *
+	 * @since 3.8.0
+	 *
+	 * @return array Options with arguments.
+	 */
+	public function get_options() {
+		return $this->_options;
 	}
 
 	/**

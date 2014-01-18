@@ -32,12 +32,13 @@ function get_post_format( $post = null ) {
 }
 
 /**
- * Check if a post has a particular format
+ * Check if a post has any of the given formats, or any format.
  *
  * @since 3.1.0
  *
  * @uses has_term()
  *
+<<<<<<< HEAD
  * @param string|array $format The format or formats to check.
  * @param object|int   $post   The post to check. If not supplied, defaults to the current post if used in the loop.
  * @return bool True if the post has the format, false otherwise.
@@ -49,6 +50,19 @@ function has_post_format( $format, $post = null ) {
 	$prefixed = array();
 	foreach( $format as $single ) {
 		$prefixed[] = 'post-format-' . sanitize_key( $single );
+=======
+ * @param string|array $format Optional. The format or formats to check.
+ * @param object|int $post Optional. The post to check. If not supplied, defaults to the current post if used in the loop.
+ * @return bool True if the post has any of the given formats (or any format, if no format specified), false otherwise.
+ */
+function has_post_format( $format = array(), $post = null ) {
+	$prefixed = array();
+
+	if ( $format ) {
+		foreach ( (array) $format as $single ) {
+			$prefixed[] = 'post-format-' . sanitize_key( $single );
+		}
+>>>>>>> wordpress/3.8-branch
 	}
 
 	return has_term( $prefixed, 'post_format', $post );

@@ -1,3 +1,7 @@
+<<<<<<< HEAD
+=======
+/* global _wpUtilSettings */
+>>>>>>> wordpress/3.8-branch
 window.wp = window.wp || {};
 
 (function ($) {
