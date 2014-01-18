@@ -1,3 +1,4 @@
+/* global _wpRevisionsSettings, isRtl */
 window.wp = window.wp || {};
 
 (function($) {
@@ -12,8 +13,14 @@ window.wp = window.wp || {};
 	revisions.debug = false;
 
 	revisions.log = function() {
+<<<<<<< HEAD
 		if ( window.console && revisions.debug )
 			console.log.apply( console, arguments );
+=======
+		if ( window.console && revisions.debug ) {
+			window.console.log.apply( window.console, arguments );
+		}
+>>>>>>> wordpress/3.8-branch
 	};
 
 	// Handy functions to help with positioning
@@ -34,6 +41,7 @@ window.wp = window.wp || {};
 	};
 
 	// wp_localize_script transforms top-level numbers into strings. Undo that.
+<<<<<<< HEAD
 	if ( revisions.settings.to )
 		revisions.settings.to = parseInt( revisions.settings.to, 10 );
 	if ( revisions.settings.from )
@@ -42,6 +50,19 @@ window.wp = window.wp || {};
 	// wp_localize_script does not allow for top-level booleans. Fix that.
 	if ( revisions.settings.compareTwoMode )
 		revisions.settings.compareTwoMode = revisions.settings.compareTwoMode === '1';
+=======
+	if ( revisions.settings.to ) {
+		revisions.settings.to = parseInt( revisions.settings.to, 10 );
+	}
+	if ( revisions.settings.from ) {
+		revisions.settings.from = parseInt( revisions.settings.from, 10 );
+	}
+
+	// wp_localize_script does not allow for top-level booleans. Fix that.
+	if ( revisions.settings.compareTwoMode ) {
+		revisions.settings.compareTwoMode = revisions.settings.compareTwoMode === '1';
+	}
+>>>>>>> wordpress/3.8-branch
 
 	/**
 	 * ========================================================================
@@ -130,8 +151,14 @@ window.wp = window.wp || {};
 		// Receives revisions changes from outside the model
 		receiveRevisions: function( from, to ) {
 			// Bail if nothing changed
+<<<<<<< HEAD
 			if ( this.get('from') === from && this.get('to') === to )
 				return;
+=======
+			if ( this.get('from') === from && this.get('to') === to ) {
+				return;
+			}
+>>>>>>> wordpress/3.8-branch
 
 			this.set({ from: from, to: to }, { silent: true });
 			this.trigger( 'update:revisions', from, to );
@@ -183,15 +210,27 @@ window.wp = window.wp || {};
 		next: function( revision ) {
 			var index = this.indexOf( revision );
 
+<<<<<<< HEAD
 			if ( index !== -1 && index !== this.length - 1 )
 				return this.at( index + 1 );
+=======
+			if ( index !== -1 && index !== this.length - 1 ) {
+				return this.at( index + 1 );
+			}
+>>>>>>> wordpress/3.8-branch
 		},
 
 		prev: function( revision ) {
 			var index = this.indexOf( revision );
 
+<<<<<<< HEAD
 			if ( index !== -1 && index !== 0 )
 				return this.at( index - 1 );
+=======
+			if ( index !== -1 && index !== 0 ) {
+				return this.at( index - 1 );
+			}
+>>>>>>> wordpress/3.8-branch
 		}
 	});
 
@@ -202,7 +241,11 @@ window.wp = window.wp || {};
 	});
 
 	revisions.model.Diff = Backbone.Model.extend({
+<<<<<<< HEAD
 		initialize: function( attributes, options ) {
+=======
+		initialize: function() {
+>>>>>>> wordpress/3.8-branch
 			var fields = this.get('fields');
 			this.unset('fields');
 
@@ -221,12 +264,21 @@ window.wp = window.wp || {};
 		model: revisions.model.Diff,
 
 		ensure: function( id, context ) {
+<<<<<<< HEAD
 			var diff     = this.get( id );
 			var request  = this.requests[ id ];
 			var deferred = $.Deferred();
 			var ids      = {};
 			var from     = id.split(':')[0];
 			var to       = id.split(':')[1];
+=======
+			var diff     = this.get( id ),
+				request  = this.requests[ id ],
+				deferred = $.Deferred(),
+				ids      = {},
+				from     = id.split(':')[0],
+				to       = id.split(':')[1];
+>>>>>>> wordpress/3.8-branch
 			ids[id] = true;
 
 			wp.revisions.log( 'ensure', id );
@@ -239,11 +291,21 @@ window.wp = window.wp || {};
 				this.trigger( 'ensure:load', ids, from, to, deferred.promise() );
 				_.each( ids, _.bind( function( id ) {
 					// Remove anything that has an ongoing request
+<<<<<<< HEAD
 					if ( this.requests[ id ] )
 						delete ids[ id ];
 					// Remove anything we already have
 					if ( this.get( id ) )
 						delete ids[ id ];
+=======
+					if ( this.requests[ id ] ) {
+						delete ids[ id ];
+					}
+					// Remove anything we already have
+					if ( this.get( id ) ) {
+						delete ids[ id ];
+					}
+>>>>>>> wordpress/3.8-branch
 				}, this ) );
 				if ( ! request ) {
 					// Always include the ID that started this ensure
@@ -274,8 +336,13 @@ window.wp = window.wp || {};
 		},
 
 		_loadAll: function( allRevisionIds, centerId, num ) {
+<<<<<<< HEAD
 			var self = this, deferred = $.Deferred();
 			diffs = _.first( this.getClosestUnloaded( allRevisionIds, centerId ), num );
+=======
+			var self = this, deferred = $.Deferred(),
+				diffs = _.first( this.getClosestUnloaded( allRevisionIds, centerId ), num );
+>>>>>>> wordpress/3.8-branch
 			if ( _.size( diffs ) > 0 ) {
 				this.load( diffs ).done( function() {
 					self._loadAll( allRevisionIds, centerId, num ).done( function() {
@@ -299,6 +366,7 @@ window.wp = window.wp || {};
 		load: function( comparisons ) {
 			wp.revisions.log( 'load', comparisons );
 			// Our collection should only ever grow, never shrink, so remove: false
+<<<<<<< HEAD
 			return this.fetch({ data: { compare: comparisons }, remove: false }).done( function(){
 				wp.revisions.log( 'load:complete', comparisons );
 			});
@@ -315,6 +383,24 @@ window.wp = window.wp || {};
 
 				var deferred = wp.ajax.send( options );
 				var requests = this.requests;
+=======
+			return this.fetch({ data: { compare: comparisons }, remove: false }).done( function() {
+				wp.revisions.log( 'load:complete', comparisons );
+			});
+		},
+
+		sync: function( method, model, options ) {
+			if ( 'read' === method ) {
+				options = options || {};
+				options.context = this;
+				options.data = _.extend( options.data || {}, {
+					action: 'get-revision-diffs',
+					post_id: revisions.settings.postId
+				});
+
+				var deferred = wp.ajax.send( options ),
+					requests = this.requests;
+>>>>>>> wordpress/3.8-branch
 
 				// Record that we're requesting each diff.
 				if ( options.data.compare ) {
@@ -331,9 +417,15 @@ window.wp = window.wp || {};
 						});
 					}
 				});
+<<<<<<< HEAD
 
 				return deferred;
 
+=======
+
+				return deferred;
+
+>>>>>>> wordpress/3.8-branch
 			// Otherwise, fall back to `Backbone.sync()`.
 			} else {
 				return Backbone.Model.prototype.sync.apply( this, arguments );
@@ -347,6 +439,7 @@ window.wp = window.wp || {};
 			loading: false,
 			error: false,
 			compareTwoMode: false
+<<<<<<< HEAD
 		},
 
 		initialize: function( attributes, options ) {
@@ -619,6 +712,281 @@ window.wp = window.wp || {};
 			this.listenTo( this.model, 'change:revision', this.reportTickPosition );
 		},
 
+=======
+		},
+
+		initialize: function( attributes, options ) {
+			var properties = {};
+
+			_.bindAll( this, 'receiveDiff' );
+			this._debouncedEnsureDiff = _.debounce( this._ensureDiff, 200 );
+
+			this.revisions = options.revisions;
+			this.diffs = new revisions.model.Diffs( [], { revisions: this.revisions });
+
+			// Set the initial diffs collection provided through the settings
+			this.diffs.set( revisions.settings.diffData );
+
+			// Set up internal listeners
+			this.listenTo( this, 'change:from', this.changeRevisionHandler );
+			this.listenTo( this, 'change:to', this.changeRevisionHandler );
+			this.listenTo( this, 'change:compareTwoMode', this.changeMode );
+			this.listenTo( this, 'update:revisions', this.updatedRevisions );
+			this.listenTo( this.diffs, 'ensure:load', this.updateLoadingStatus );
+			this.listenTo( this, 'update:diff', this.updateLoadingStatus );
+
+			// Set the initial revisions, baseUrl, and mode as provided through settings
+			properties.to = this.revisions.get( revisions.settings.to );
+			properties.from = this.revisions.get( revisions.settings.from );
+			properties.compareTwoMode = revisions.settings.compareTwoMode;
+			properties.baseUrl = revisions.settings.baseUrl;
+			this.set( properties );
+
+			// Start the router if browser supports History API
+			if ( window.history && window.history.pushState ) {
+				this.router = new revisions.Router({ model: this });
+				Backbone.history.start({ pushState: true });
+			}
+		},
+
+		updateLoadingStatus: function() {
+			this.set( 'error', false );
+			this.set( 'loading', ! this.diff() );
+		},
+
+		changeMode: function( model, value ) {
+			// If we were on the first revision before switching, we have to bump them over one
+			if ( value && 0 === this.revisions.indexOf( this.get('to') ) ) {
+				this.set({
+					from: this.revisions.at(0),
+					to: this.revisions.at(1)
+				});
+			}
+		},
+
+		updatedRevisions: function( from, to ) {
+			if ( this.get( 'compareTwoMode' ) ) {
+				// TODO: compare-two loading strategy
+			} else {
+				this.diffs.loadAll( this.revisions.pluck('id'), to.id, 40 );
+			}
+		},
+
+		// Fetch the currently loaded diff.
+		diff: function() {
+			return this.diffs.get( this._diffId );
+		},
+
+		// So long as `from` and `to` are changed at the same time, the diff
+		// will only be updated once. This is because Backbone updates all of
+		// the changed attributes in `set`, and then fires the `change` events.
+		updateDiff: function( options ) {
+			var from, to, diffId, diff;
+
+			options = options || {};
+			from = this.get('from');
+			to = this.get('to');
+			diffId = ( from ? from.id : 0 ) + ':' + to.id;
+
+			// Check if we're actually changing the diff id.
+			if ( this._diffId === diffId ) {
+				return $.Deferred().reject().promise();
+			}
+
+			this._diffId = diffId;
+			this.trigger( 'update:revisions', from, to );
+
+			diff = this.diffs.get( diffId );
+
+			// If we already have the diff, then immediately trigger the update.
+			if ( diff ) {
+				this.receiveDiff( diff );
+				return $.Deferred().resolve().promise();
+			// Otherwise, fetch the diff.
+			} else {
+				if ( options.immediate ) {
+					return this._ensureDiff();
+				} else {
+					this._debouncedEnsureDiff();
+					return $.Deferred().reject().promise();
+				}
+			}
+		},
+
+		// A simple wrapper around `updateDiff` to prevent the change event's
+		// parameters from being passed through.
+		changeRevisionHandler: function() {
+			this.updateDiff();
+		},
+
+		receiveDiff: function( diff ) {
+			// Did we actually get a diff?
+			if ( _.isUndefined( diff ) || _.isUndefined( diff.id ) ) {
+				this.set({
+					loading: false,
+					error: true
+				});
+			} else if ( this._diffId === diff.id ) { // Make sure the current diff didn't change
+				this.trigger( 'update:diff', diff );
+			}
+		},
+
+		_ensureDiff: function() {
+			return this.diffs.ensure( this._diffId, this ).always( this.receiveDiff );
+		}
+	});
+
+
+	/**
+	 * ========================================================================
+	 * VIEWS
+	 * ========================================================================
+	 */
+
+	// The frame view. This contains the entire page.
+	revisions.view.Frame = wp.Backbone.View.extend({
+		className: 'revisions',
+		template: wp.template('revisions-frame'),
+
+		initialize: function() {
+			this.listenTo( this.model, 'update:diff', this.renderDiff );
+			this.listenTo( this.model, 'change:compareTwoMode', this.updateCompareTwoMode );
+			this.listenTo( this.model, 'change:loading', this.updateLoadingStatus );
+			this.listenTo( this.model, 'change:error', this.updateErrorStatus );
+
+			this.views.set( '.revisions-control-frame', new revisions.view.Controls({
+				model: this.model
+			}) );
+		},
+
+		render: function() {
+			wp.Backbone.View.prototype.render.apply( this, arguments );
+
+			$('html').css( 'overflow-y', 'scroll' );
+			$('#wpbody-content .wrap').append( this.el );
+			this.updateCompareTwoMode();
+			this.renderDiff( this.model.diff() );
+			this.views.ready();
+
+			return this;
+		},
+
+		renderDiff: function( diff ) {
+			this.views.set( '.revisions-diff-frame', new revisions.view.Diff({
+				model: diff
+			}) );
+		},
+
+		updateLoadingStatus: function() {
+			this.$el.toggleClass( 'loading', this.model.get('loading') );
+		},
+
+		updateErrorStatus: function() {
+			this.$el.toggleClass( 'diff-error', this.model.get('error') );
+		},
+
+		updateCompareTwoMode: function() {
+			this.$el.toggleClass( 'comparing-two-revisions', this.model.get('compareTwoMode') );
+		}
+	});
+
+	// The control view.
+	// This contains the revision slider, previous/next buttons, the meta info and the compare checkbox.
+	revisions.view.Controls = wp.Backbone.View.extend({
+		className: 'revisions-controls',
+
+		initialize: function() {
+			_.bindAll( this, 'setWidth' );
+
+			// Add the button view
+			this.views.add( new revisions.view.Buttons({
+				model: this.model
+			}) );
+
+			// Add the checkbox view
+			this.views.add( new revisions.view.Checkbox({
+				model: this.model
+			}) );
+
+			// Prep the slider model
+			var slider = new revisions.model.Slider({
+				frame: this.model,
+				revisions: this.model.revisions
+			}),
+
+			// Prep the tooltip model
+			tooltip = new revisions.model.Tooltip({
+				frame: this.model,
+				revisions: this.model.revisions,
+				slider: slider
+			});
+
+			// Add the tooltip view
+			this.views.add( new revisions.view.Tooltip({
+				model: tooltip
+			}) );
+
+			// Add the tickmarks view
+			this.views.add( new revisions.view.Tickmarks({
+				model: tooltip
+			}) );
+
+			// Add the slider view
+			this.views.add( new revisions.view.Slider({
+				model: slider
+			}) );
+
+			// Add the Metabox view
+			this.views.add( new revisions.view.Metabox({
+				model: this.model
+			}) );
+		},
+
+		ready: function() {
+			this.top = this.$el.offset().top;
+			this.window = $(window);
+			this.window.on( 'scroll.wp.revisions', {controls: this}, function(e) {
+				var controls  = e.data.controls,
+					container = controls.$el.parent(),
+					scrolled  = controls.window.scrollTop(),
+					frame     = controls.views.parent;
+
+				if ( scrolled >= controls.top ) {
+					if ( ! frame.$el.hasClass('pinned') ) {
+						controls.setWidth();
+						container.css('height', container.height() + 'px' );
+						controls.window.on('resize.wp.revisions.pinning click.wp.revisions.pinning', {controls: controls}, function(e) {
+							e.data.controls.setWidth();
+						});
+					}
+					frame.$el.addClass('pinned');
+				} else if ( frame.$el.hasClass('pinned') ) {
+					controls.window.off('.wp.revisions.pinning');
+					controls.$el.css('width', 'auto');
+					frame.$el.removeClass('pinned');
+					container.css('height', 'auto');
+					controls.top = controls.$el.offset().top;
+				} else {
+					controls.top = controls.$el.offset().top;
+				}
+			});
+		},
+
+		setWidth: function() {
+			this.$el.css('width', this.$el.parent().width() + 'px');
+		}
+	});
+
+	// The tickmarks view
+	revisions.view.Tickmarks = wp.Backbone.View.extend({
+		className: 'revisions-tickmarks',
+		direction: isRtl ? 'right' : 'left',
+
+		initialize: function() {
+			this.listenTo( this.model, 'change:revision', this.reportTickPosition );
+		},
+
+>>>>>>> wordpress/3.8-branch
 		reportTickPosition: function( model, revision ) {
 			var offset, thisOffset, parentOffset, tick, index = this.model.revisions.indexOf( revision );
 			thisOffset = this.$el.allOffsets();
@@ -714,18 +1082,32 @@ window.wp = window.wp || {};
 	revisions.view.Checkbox = wp.Backbone.View.extend({
 		className: 'revisions-checkbox',
 		template: wp.template('revisions-checkbox'),
+<<<<<<< HEAD
 
 		events: {
 			'click .compare-two-revisions': 'compareTwoToggle'
 		},
 
+=======
+
+		events: {
+			'click .compare-two-revisions': 'compareTwoToggle'
+		},
+
+>>>>>>> wordpress/3.8-branch
 		initialize: function() {
 			this.listenTo( this.model, 'change:compareTwoMode', this.updateCompareTwoMode );
 		},
 
 		ready: function() {
+<<<<<<< HEAD
 			if ( this.model.revisions.length < 3 )
 				$('.revision-toggle-compare-mode').hide();
+=======
+			if ( this.model.revisions.length < 3 ) {
+				$('.revision-toggle-compare-mode').hide();
+			}
+>>>>>>> wordpress/3.8-branch
 		},
 
 		updateCompareTwoMode: function() {
@@ -733,7 +1115,11 @@ window.wp = window.wp || {};
 		},
 
 		// Toggle the compare two mode feature when the compare two checkbox is checked.
+<<<<<<< HEAD
 		compareTwoToggle: function( event ) {
+=======
+		compareTwoToggle: function() {
+>>>>>>> wordpress/3.8-branch
 			// Activate compare two mode?
 			this.model.set({ compareTwoMode: $('.compare-two-revisions').prop('checked') });
 		}
@@ -745,13 +1131,18 @@ window.wp = window.wp || {};
 		className: 'revisions-tooltip',
 		template: wp.template('revisions-meta'),
 
+<<<<<<< HEAD
 		initialize: function( options ) {
+=======
+		initialize: function() {
+>>>>>>> wordpress/3.8-branch
 			this.listenTo( this.model, 'change:offset', this.render );
 			this.listenTo( this.model, 'change:hovering', this.toggleVisibility );
 			this.listenTo( this.model, 'change:scrubbing', this.toggleVisibility );
 		},
 
 		prepare: function() {
+<<<<<<< HEAD
 			if ( _.isNull( this.model.get('revision') ) )
 				return;
 			else
@@ -762,6 +1153,25 @@ window.wp = window.wp || {};
 
 		render: function() {
 			var direction, directionVal, flipped, css = {}, position = this.model.revisions.indexOf( this.model.get('revision') ) + 1;
+=======
+			if ( _.isNull( this.model.get('revision') ) ) {
+				return;
+			} else {
+				return _.extend( { type: 'tooltip' }, {
+					attributes: this.model.get('revision').toJSON()
+				});
+			}
+		},
+
+		render: function() {
+			var otherDirection,
+				direction,
+				directionVal,
+				flipped,
+				css      = {},
+				position = this.model.revisions.indexOf( this.model.get('revision') ) + 1;
+
+>>>>>>> wordpress/3.8-branch
 			flipped = ( position / this.model.revisions.length ) > 0.5;
 			if ( isRtl ) {
 				direction = flipped ? 'left' : 'right';
@@ -781,11 +1191,20 @@ window.wp = window.wp || {};
 			return this.model.get( 'scrubbing' ) || this.model.get( 'hovering' );
 		},
 
+<<<<<<< HEAD
 		toggleVisibility: function( options ) {
 			if ( this.visible() )
 				this.$el.stop().show().fadeTo( 100 - this.el.style.opacity * 100, 1 );
 			else
 				this.$el.stop().fadeTo( this.el.style.opacity * 300, 0, function(){ $(this).hide(); } );
+=======
+		toggleVisibility: function() {
+			if ( this.visible() ) {
+				this.$el.stop().show().fadeTo( 100 - this.el.style.opacity * 100, 1 );
+			} else {
+				this.$el.stop().fadeTo( this.el.style.opacity * 300, 0, function(){ $(this).hide(); } );
+			}
+>>>>>>> wordpress/3.8-branch
 			return;
 		}
 	});
@@ -815,10 +1234,18 @@ window.wp = window.wp || {};
 				to: this.model.revisions.at( toIndex )
 			};
 			// If we're at the first revision, unset 'from'.
+<<<<<<< HEAD
 			if ( toIndex )
 				attributes.from = this.model.revisions.at( toIndex - 1 );
 			else
 				this.model.unset('from', { silent: true });
+=======
+			if ( toIndex ) {
+				attributes.from = this.model.revisions.at( toIndex - 1 );
+			} else {
+				this.model.unset('from', { silent: true });
+			}
+>>>>>>> wordpress/3.8-branch
 
 			this.model.set( attributes );
 		},
@@ -837,6 +1264,7 @@ window.wp = window.wp || {};
 
 		// Check to see if the Previous or Next buttons need to be disabled or enabled.
 		disabledButtonCheck: function() {
+<<<<<<< HEAD
 			var maxVal = this.model.revisions.length - 1,
 				minVal = 0,
 				next = $('.revisions-next .button'),
@@ -966,6 +1394,138 @@ window.wp = window.wp || {};
 			} );
 		},
 
+=======
+			var maxVal   = this.model.revisions.length - 1,
+				minVal   = 0,
+				next     = $('.revisions-next .button'),
+				previous = $('.revisions-previous .button'),
+				val      = this.model.revisions.indexOf( this.model.get('to') );
+
+			// Disable "Next" button if you're on the last node.
+			next.prop( 'disabled', ( maxVal === val ) );
+
+			// Disable "Previous" button if you're on the first node.
+			previous.prop( 'disabled', ( minVal === val ) );
+		}
+	});
+
+
+	// The slider view.
+	revisions.view.Slider = wp.Backbone.View.extend({
+		className: 'wp-slider',
+		direction: isRtl ? 'right' : 'left',
+
+		events: {
+			'mousemove' : 'mouseMove'
+		},
+
+		initialize: function() {
+			_.bindAll( this, 'start', 'slide', 'stop', 'mouseMove', 'mouseEnter', 'mouseLeave' );
+			this.listenTo( this.model, 'update:slider', this.applySliderSettings );
+		},
+
+		ready: function() {
+			this.$el.css('width', ( this.model.revisions.length * 50 ) + 'px');
+			this.$el.slider( _.extend( this.model.toJSON(), {
+				start: this.start,
+				slide: this.slide,
+				stop:  this.stop
+			}) );
+
+			this.$el.hoverIntent({
+				over: this.mouseEnter,
+				out: this.mouseLeave,
+				timeout: 800
+			});
+
+			this.applySliderSettings();
+		},
+
+		mouseMove: function( e ) {
+			var zoneCount         = this.model.revisions.length - 1, // One fewer zone than models
+				sliderFrom        = this.$el.allOffsets()[this.direction], // "From" edge of slider
+				sliderWidth       = this.$el.width(), // Width of slider
+				tickWidth         = sliderWidth / zoneCount, // Calculated width of zone
+				actualX           = ( isRtl ? $(window).width() - e.pageX : e.pageX ) - sliderFrom, // Flipped for RTL - sliderFrom;
+				currentModelIndex = Math.floor( ( actualX  + ( tickWidth / 2 )  ) / tickWidth ); // Calculate the model index
+
+			// Ensure sane value for currentModelIndex.
+			if ( currentModelIndex < 0 ) {
+				currentModelIndex = 0;
+			} else if ( currentModelIndex >= this.model.revisions.length ) {
+				currentModelIndex = this.model.revisions.length - 1;
+			}
+
+			// Update the tooltip mode
+			this.model.set({ hoveredRevision: this.model.revisions.at( currentModelIndex ) });
+		},
+
+		mouseLeave: function() {
+			this.model.set({ hovering: false });
+		},
+
+		mouseEnter: function() {
+			this.model.set({ hovering: true });
+		},
+
+		applySliderSettings: function() {
+			this.$el.slider( _.pick( this.model.toJSON(), 'value', 'values', 'range' ) );
+			var handles = this.$('a.ui-slider-handle');
+
+			if ( this.model.get('compareTwoMode') ) {
+				// in RTL mode the 'left handle' is the second in the slider, 'right' is first
+				handles.first()
+					.toggleClass( 'to-handle', !! isRtl )
+					.toggleClass( 'from-handle', ! isRtl );
+				handles.last()
+					.toggleClass( 'from-handle', !! isRtl )
+					.toggleClass( 'to-handle', ! isRtl );
+			} else {
+				handles.removeClass('from-handle to-handle');
+			}
+		},
+
+		start: function( event, ui ) {
+			this.model.set({ scrubbing: true });
+
+			// Track the mouse position to enable smooth dragging,
+			// overrides default jQuery UI step behavior.
+			$( window ).on( 'mousemove.wp.revisions', { view: this }, function( e ) {
+				var handles,
+					view              = e.data.view,
+					leftDragBoundary  = view.$el.offset().left,
+					sliderOffset      = leftDragBoundary,
+					sliderRightEdge   = leftDragBoundary + view.$el.width(),
+					rightDragBoundary = sliderRightEdge,
+					leftDragReset     = '0',
+					rightDragReset    = '100%',
+					handle            = $( ui.handle );
+
+				// In two handle mode, ensure handles can't be dragged past each other.
+				// Adjust left/right boundaries and reset points.
+				if ( view.model.get('compareTwoMode') ) {
+					handles = handle.parent().find('.ui-slider-handle');
+					if ( handle.is( handles.first() ) ) { // We're the left handle
+						rightDragBoundary = handles.last().offset().left;
+						rightDragReset    = rightDragBoundary - sliderOffset;
+					} else { // We're the right handle
+						leftDragBoundary = handles.first().offset().left + handles.first().width();
+						leftDragReset    = leftDragBoundary - sliderOffset;
+					}
+				}
+
+				// Follow mouse movements, as long as handle remains inside slider.
+				if ( e.pageX < leftDragBoundary ) {
+					handle.css( 'left', leftDragReset ); // Mouse to left of slider.
+				} else if ( e.pageX > rightDragBoundary ) {
+					handle.css( 'left', rightDragReset ); // Mouse to right of slider.
+				} else {
+					handle.css( 'left', e.pageX - sliderOffset ); // Mouse in slider.
+				}
+			} );
+		},
+
+>>>>>>> wordpress/3.8-branch
 		getPosition: function( position ) {
 			return isRtl ? this.model.revisions.length - position - 1: position;
 		},
@@ -976,10 +1536,19 @@ window.wp = window.wp || {};
 			// Compare two revisions mode
 			if ( this.model.get('compareTwoMode') ) {
 				// Prevent sliders from occupying same spot
+<<<<<<< HEAD
 				if ( ui.values[1] === ui.values[0] )
 					return false;
 				if ( isRtl )
 					ui.values.reverse();
+=======
+				if ( ui.values[1] === ui.values[0] ) {
+					return false;
+				}
+				if ( isRtl ) {
+					ui.values.reverse();
+				}
+>>>>>>> wordpress/3.8-branch
 				attributes = {
 					from: this.model.revisions.at( this.getPosition( ui.values[0] ) ),
 					to: this.model.revisions.at( this.getPosition( ui.values[1] ) )
@@ -989,21 +1558,39 @@ window.wp = window.wp || {};
 					to: this.model.revisions.at( this.getPosition( ui.value ) )
 				};
 				// If we're at the first revision, unset 'from'.
+<<<<<<< HEAD
 				if ( this.getPosition( ui.value ) > 0 )
 					attributes.from = this.model.revisions.at( this.getPosition( ui.value ) - 1 );
 				else
 					attributes.from = undefined;
+=======
+				if ( this.getPosition( ui.value ) > 0 ) {
+					attributes.from = this.model.revisions.at( this.getPosition( ui.value ) - 1 );
+				} else {
+					attributes.from = undefined;
+				}
+>>>>>>> wordpress/3.8-branch
 			}
 			movedRevision = this.model.revisions.at( this.getPosition( ui.value ) );
 
 			// If we are scrubbing, a scrub to a revision is considered a hover
+<<<<<<< HEAD
 			if ( this.model.get('scrubbing') )
 				attributes.hoveredRevision = movedRevision;
+=======
+			if ( this.model.get('scrubbing') ) {
+				attributes.hoveredRevision = movedRevision;
+			}
+>>>>>>> wordpress/3.8-branch
 
 			this.model.set( attributes );
 		},
 
+<<<<<<< HEAD
 		stop: function( event, ui ) {
+=======
+		stop: function() {
+>>>>>>> wordpress/3.8-branch
 			$( window ).off('mousemove.wp.revisions');
 			this.model.updateSliderSettings(); // To snap us back to a tick mark
 			this.model.set({ scrubbing: false });
@@ -1014,7 +1601,11 @@ window.wp = window.wp || {};
 	// This is the view for the current active diff.
 	revisions.view.Diff = wp.Backbone.View.extend({
 		className: 'revisions-diff',
+<<<<<<< HEAD
 		template: wp.template('revisions-diff'),
+=======
+		template:  wp.template('revisions-diff'),
+>>>>>>> wordpress/3.8-branch
 
 		// Generate the options to be passed to the template.
 		prepare: function() {
@@ -1041,6 +1632,7 @@ window.wp = window.wp || {};
 		},
 
 		updateUrl: function() {
+<<<<<<< HEAD
 			var from = this.model.has('from') ? this.model.get('from').id : 0;
 			var to = this.model.get('to').id;
 			if ( this.model.get('compareTwoMode' ) )
@@ -1051,6 +1643,19 @@ window.wp = window.wp || {};
 
 		handleRoute: function( a, b ) {
 			var from, to, compareTwo = _.isUndefined( b );
+=======
+			var from = this.model.has('from') ? this.model.get('from').id : 0,
+				to   = this.model.get('to').id;
+			if ( this.model.get('compareTwoMode' ) ) {
+				this.navigate( this.baseUrl( '?from=' + from + '&to=' + to ) );
+			} else {
+				this.navigate( this.baseUrl( '?revision=' + to ) );
+			}
+		},
+
+		handleRoute: function( a, b ) {
+			var compareTwo = _.isUndefined( b );
+>>>>>>> wordpress/3.8-branch
 
 			if ( ! compareTwo ) {
 				b = this.model.revisions.get( a );

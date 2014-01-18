@@ -1,17 +1,34 @@
-<?php
-/**
- * Front to the WordPress application. This file doesn't do anything, but loads
- * wp-blog-header.php which does and tells WordPress to load the theme.
- *
- * @package WordPress
- */
+<?php get_header(); ?>
+<?php get_template_part('head'); ?>
+<?php include_once("theme-core/controller.php"); ?>
 
-/**
- * Tells WordPress to load the WordPress theme and output it.
- *
- * @var bool
- */
-define('WP_USE_THEMES', true);
 
-/** Loads the WordPress Environment and Template */
-require('./wp-blog-header.php');
+
+<div id="container">
+
+<h1 id="index_title">Novedades</h1>
+	<div id="hover-area">
+	<?php get_template_part("filter"); //filtro ?>
+	<?php get_template_part("loop-cat"); //loop condicionado ?>
+	</div>
+
+
+</div><!-- end of BIG CONTAINER -->
+
+<!--
+<div id="container">
+<h1 id="index_title">Actas</h1>
+<?php get_template_part("actas"); //actas?>
+</div>
+
+<div id="container">
+<h1 id="index_title">Comunicados</h1>
+<?php get_template_part("comunicados-loop"); //actas?>
+</div>
+
+<div id="container">
+<h1 id="index_title">Comunicados</h1>
+<?php get_template_part("contacto"); //actas?>
+</div>
+-->
+<?php get_footer() ?>
