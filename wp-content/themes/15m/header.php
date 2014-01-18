@@ -11,5 +11,6 @@
 	
 	<script src="http://code.jquery.com/jquery-1.9.1.js"></script>
 	<script src="<?php bloginfo('template_directory'); ?>/js/main.js" type="text/javascript"></script>
+	
 </head>
 <body>

@@ -18,6 +18,7 @@
 
 
 <?php 
+
 /*==== THE SWITCH ====*/
 
 switch ($catName) {
@@ -29,7 +30,7 @@ case "post":
 	?>
 	
 	<section id="post" class="<?php echo $catName; ?>">
-		
+		<a href="<?php the_permalink(); ?>">
 		<h2>
 			<div class="dots">
 				<span class="cat1"></span>
@@ -37,7 +38,7 @@ case "post":
 			</div>
 			<span class="title"><?php the_title() ?></span>
 		</h2>
-		
+		</a>
 		<div id="visual">
 			<?php 
 				if (has_post_thumbnail()) {
@@ -88,12 +89,14 @@ case "gtrabajo":
 	?>
 	
 	<section id="post" class="gtrabajo">
+		<a href="<?php the_permalink(); ?>">
 		<h2>
 			<div class="dots">
 				<span class="cat4"></span>
 			</div>
 			<span class="title">Grupo de trabajo</span>
-		</h2>			
+		</h2>	
+		</a>
 		<div id="asamblea-description">
 			
 			<h3><?php echo($gtrabajo_custom["gtrabajo-nombre"][0]); ?></h3>
@@ -103,7 +106,7 @@ case "gtrabajo":
 			<h4><?php echo($gtrabajo_custom["gtrabajo-lugar"][0]); ?></h4>
 		</div>
 		<div id="map">
-			<img src="<?php bloginfo('template_directory'); ?>/img/Bild 1.png" alt="img de titulo x"/>
+			<img src="http://maps.googleapis.com/maps/api/staticmap?center=<?php echo $gtrabajo_custom["gtrabajo-mapa-x"][0]; ?>,<?php echo $gtrabajo_custom["gtrabajo-mapa-y"][0]; ?>&zoom=13&size=200x150&sensor=false" />
 		</div>
 		
 		<div id="post-data">
@@ -130,13 +133,14 @@ case "mani":
 	?>
 	
 	<section id="post" class="mani red">
+		<a href="<?php the_permalink(); ?>">
 		<h2>
 			<div class="dots">
 				<span class="cat5"></span>
 			</div>
 			<span class="title">Movilización</span>
 		</h2>			
-		
+		</a>
 		<div id="visual">
 			<?php //imagen de la mani
 			if (has_post_thumbnail()) {
@@ -177,12 +181,14 @@ case "asamblea":
 	
 	
 	<section id="post" class="asamblea">
+		<a href="<?php the_permalink(); ?>">
 		<h2>
 			<div class="dots">
 				<span class="cat3"></span>
 			</div>
 			<span class="title">Asamblea</span>
-		</h2>			
+		</h2>
+		</a>
 		<div id="asamblea-description">
 			<h3>Fecha y hora</h3>
 			<h4>El día <?php echo($asamblea_custom["asamblea-fecha"][0]); ?><br/>A las <?php echo($asamblea_custom["asamblea-hora"][0]); ?></h4>
@@ -237,7 +243,7 @@ default:
 		} //cierro while
 	} // cierro if
 ?>
-</div><!-- end of BIG CONTAINER -->
+
 <?php // pruebas 	
 
 ?>

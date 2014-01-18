@@ -5,10 +5,10 @@
 window.onload = function () {
 	//compruebo si estoy en admin o no...
 	if(document.getElementById("asamblea")) { //esta id sólo existe en admin-post.php
-		//metaBox_admin.init();
+		
+		
 		//funciones para ocultar y ordenar boxes según categoría marcada
-		checkToRadio();
-		hideBox();
+		metaBox_admin.init();
 		
 		
 		//inicializamos ahora todos los calculos de mapas
@@ -148,13 +148,6 @@ var insertMapURL = function (ev) {
 };
 
 
-var checkToRadio = function () {
-	var checkbox = document.querySelectorAll("[id^='in-category-'][type = 'checkbox']");
-	for (var i = 0; i < checkbox.length; i++) {
-		checkbox[i].type = "radio";
-	}
-};
-
 var hideBox = function () {
 		var checkbox = document.querySelectorAll("[id^='in-category-'][type = 'radio']");
 		var catNumber = [];
@@ -217,6 +210,103 @@ var hideBox = function () {
 				}
 			}, false);
 		}
+};
+
+
+var metaBox_admin = {
+	
+	types: ["asamblea", "gtrabajo", "mani"],
+	
+	//toma los checkbox de la caja de categorías
+	checkbox: document.querySelectorAll("[id^='in-category-'][type = 'checkbox']"),
+	
+	//toma los radios de la caja de categorías
+	cat_radio: function () {
+		var a = document.querySelectorAll("[id^='in-category-'][type = 'radio']");
+		return a;
+	},
+	
+	//convierte checkbuttons en radios (por si no funciona el plugin)
+	checkToRadio: function() { 
+		var c = this.cat_radio();
+		for (var i = 0; i < c.length; i++) {
+			c[i].type = "radio";
+		}
+	},
+	
+	//oculta todas las cajas
+	hideBox: function() {
+		for (var i = 0; i < this.types.length; i++) {
+			document.getElementById(this.types[i]).style.display = "none";	
+		}
+	},
+	
+	//pilla los números de ID que corresponden a las categorías
+	get_CatNumber: function () {
+		var a = this.cat_radio(), catNumber = [];
+		for (var i = 0; i < a.length; i++) {
+			var idName = a[i].getAttribute("id");
+			idName = idName.replace ("in-category-", "");
+			a[i].setAttribute("data-cat-id", idName);
+			catNumber[i] = idName; 
+		}
+		return catNumber;
+	},
+	
+	//saber qué radio está encendido al cargar -> qué cat está activa
+	get_cat_on: function () {
+		var check_on = 0, a = this.cat_radio();
+		for (var i = 0; i < a.lenght; i++) {
+			if(a[i].checked) check_on = i;
+		}
+		return check_on;
+	},
+	
+	//en funcion de la cat activa mostrar cajas
+	show_metabox: function (a) {
+		switch(a) {
+			case check_on = 0:
+				document.getElementById(this.types[0]).style.display = "block";
+				break;
+			case check_on = 2:
+				document.getElementById(this.types[1]).style.display = "block";
+				break;
+			case check_on = 3:
+				document.getElementById(this.types[2]).style.display = "block";
+				break;	
+		}
+	},
+	
+	//en funcion de la cat activa tras evento mostrar caja nueva
+	change_metabox: function () {
+		var a = this.cat_radio();
+		console.log(a);
+				
+		for(var i = 0; i < a.length; i++){
+			a[i].addEventListener("change", this.evHandler, false);
+		}	
+		
+	
+	},
+	
+	//la función que se dispara trs los eventos de change_metabox
+	evHandler: function (ev) {
+		console.log("hola", ev.target.getAttribute("data-cat-id"));
+	},
+	
+	//=======> que la funcion de pillar la cat por 1 vez y cuando cambia el ev sea la misma... <========
+	
+	//inicia las funciones del objeto
+	init: function () {
+		
+		this.checkToRadio(); //checkbox en radio
+		this.hideBox(); //ocultar las cajas
+		this.get_CatNumber(); //dar un data-cat-id para tener a mano las id de las categorías.
+		var cat_activa = this.get_cat_on(); //saber qué categoría está activa
+		this.show_metabox(cat_activa);
+		this.change_metabox(); //poner EventListener
+	}
+
 };
 
 
