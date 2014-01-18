@@ -216,7 +216,7 @@ case "comunicados":
 		</a>
 		<div id="comunicados-description">
 			<h3><?php echo $post->post_title; ?></h3>
-			<h4><?php echo excerpt_or_content (&$post, 70) ?></h4>
+			<h4><?php echo excerpt_or_content ($post, 70) ?></h4>
 		</div>
 		<div id="post-data">
 			<p class="pub">
