@@ -2,17 +2,18 @@
 <?php include_once("head.php"); ?>
 <?php include_once("theme-core/controller.php"); ?>
 
+<!--<pre>
+<?php 
+$cat = get_the_category();
+print_r($cat);
+?>
+</pre>-->
+
 <div id="container">
 		<div id="post_left">
 	
-		<a href="<?php echo $img_info[0]; ?>">
-			<?php 
-				if (has_post_thumbnail()) {
-					the_post_thumbnail(array(200,200), array("class"=>"post-img")); 
-				} else {
-					echo "<img  heigth='100px' width='130px'  class='post-img' src=''/>";
-				}	
-			?>
+		<a href="<?php echo $img_info[0]; ?>"> 
+			<?php post_img ();?> 
 		</a>
 		<p class="infos">
 			<span class="infos_title">Fecha Publicación:</span><br/>
@@ -55,6 +56,12 @@
 				<?php echo $post->post_title; ?>
 			</h2>
 		</a>
+		
+		<?php 
+		$arr = array("asamblea", "gtrabajo", "mani");
+		if (which_category($arr) === true) { 
+		?>
+
 		<div class="post_description">
 		<table>
 			<tr>
@@ -75,22 +82,38 @@
 			</tr>
 		</table>
 		</div>
-		
+
+		<?php  } ?>
+
+		<?php 
+		$arr = array("asamblea", "gtrabajo");
+		if (which_category($arr) === true) { 
+		?>
+
 		<div class="orden_del_dia">
 			<h4>Orden del dia</h4>
 			<p>No hay información todavía</p>
 		</div>
+
+		<?php  } ?>
 		
 		<div class="post_content">
 			<?php echo $post->post_content; ?>
 		</div>
 		
+		
+		<?php 
+		$arr = array("documentos", "comunicados");
+		if (which_category($arr, "not") === true) { 
+		?>
 		<div class="post_map">
 			<a name="map"></a>
 			<img src="http://maps.googleapis.com/maps/api/staticmap?center=<?php echo $custom_info["mapa-x"]; ?>,<?php echo $custom_info["mapa-y"];?>&zoom=13&size=800x150&sensor=false" />
 		</div>
+		<?php  } ?>
 		
 	</div> <!-- end of center -->
+	
 	<div id="post_loop">
 		<?php 
 		$my_query = new WP_Query('posts_per_page=5');
@@ -119,10 +142,3 @@
 	</div>
 
 </div>
-
-	<pre>
-	<?php 
-		$author = get_the_author();
-		print_r($author)
-	?>
-	</pre>

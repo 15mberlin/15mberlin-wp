@@ -162,6 +162,11 @@ a {
 	box-shadow: 0 1px 5px #aaa;
 }
 
+div#hover-area {
+	display: block;
+	overflow: hidden;
+}
+
 #post {
 	transition: 500ms;
 	width: 18.5%;
@@ -298,6 +303,11 @@ a {
 	z-index: 3;
 	animation: inter 3s 2s infinite;
 	-webkit-animation: inter 3s 2s infinite;
+}
+
+#post.comunicados {
+	border: 2px solid #89C271;
+	height: 200px;
 }
 
 #post.filter #pocket {
@@ -615,6 +625,21 @@ section#post.mani div#visual img, #mani #map img {
 	width: 22px;
 }
 
+#comunicados-description h3 {
+	position:relative;
+	color: #777;
+	margin: 20px 0 10px 28px;
+	text-transform: uppercase;
+}
+
+#comunicados-description h4 {
+	background: radial-gradient(circle, #FAFAFA 40%, #FAFAFA 70%) repeat scroll 0 0 transparent;
+	margin: 0 0 10px;
+	max-width: 100%;
+	padding: 0 0 0 28px;
+	color: #888;
+}
+
 #post.gtrabajo #asamblea-description h3:nth-child(1):before {
 	background: none;
 	background-repeat: no-repeat;
@@ -671,6 +696,29 @@ section#post.mani div#visual img, #mani #map img {
 	animation-timing-function: ease-in;
 	display: block;
 }
+
+/*===== ACTAS ASAMBLEA INDEX.PHP =====*/
+
+#acta {
+	width: 49%;
+	margin: 5px;
+	border: 2px solid #acacac;
+	padding: 15px;
+	float: left;
+	height: 200px;
+	overflow: hidden;
+
+	box-sizing:border-box;
+	-webkit-box-sizing: border-box;
+	-moz-box-sizing: border-box;
+
+	border-radius: 3px;
+	-moz-border-radius: 3px;
+	-webkit-border-radius: 3px;
+
+}
+
+
 
 /*===== SINGLE.PHP =====*/
 
@@ -1042,6 +1090,17 @@ div.dots span.comunicado {
 	background:#89C271;
 }
 
+/*===== HOVER EFFECT =====*/
+
+.op-50 {
+	transition: opacity 250ms ease-in;
+	opacity: 0.5;
+}
+
+.op-100 {
+	transition: opacity 250ms ease-in;
+	opacity: 1;
+}
 
 
 /*===== ANIMATION KEYS =====*/
@@ -1077,6 +1136,7 @@ div.dots span.comunicado {
 	0% {transform: scale(0);}
 	100% {transform: scale(1);}
 }
+
 
 
 @media (min-width: 768px) and (max-width: 1024px) {

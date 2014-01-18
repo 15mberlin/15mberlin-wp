@@ -59,7 +59,7 @@ button.on("click", function(e) {
 
 //isotope effect para filtrar los resultados
 //posteriormente en JSNativo
-var filters = ["post","asamblea", "gtrabajo", "mani", "comunicados"] //filtros según categorías
+var filters = ["post", "asamblea", "gtrabajo", "mani", "comunicados"] //filtros según categorías
 var container = $("#container");
 var show_class = "show";
 var hide_class = "hide";
@@ -77,9 +77,12 @@ $("#pocket ul").children().each(function(id, el){
 
 
 $("#pocket ul").children().each(function(id, el){
+	
 	$(this).on("click", function(ev){
+		
 		var selector = $(this).data("filter"); //obj con microdatas
 		var elements = $("section#post").each(function(id,el) {
+			
 			if($(el).hasClass(selector)) {	
 				$(el).removeClass(hide_class)
 					 .on("animationend", function () {
@@ -111,25 +114,61 @@ $("#post.filter h2").on("click", function(){
 });
 
 
+//hover effect
+//op-50, op-100
+/*
+var hover_op = function () {
+	$("section#post").on({
+		"mouseenter": function(ev){
+			var section = $(this).closest("section#post");
+			var section_all = $("section#post").not(this);
+			
+			if(hover_area.hasClass(hover_ready)) {
+				section.animate({"opacity": "1"}, 250);
+				section_all.animate({"opacity": "0.5"}, 250);
+			}
+		},
+		"mouseleave": function(ev){
+			console.log("fuera: " + $(ev.target).closest("section#post").eq(0));
 
+			if(hover_area.hasClass(hover_ready)) {
+				var section = $(ev.target).closest("section#post").eq(0);
+				var section_all = $("section#post");	
+			}
+		}
+	});
+};
 
+//hoverready
 
+var hover_area = $("#hover-area");
+var hover_ready = "hover-ready";
 
+hover_area.on({
+	"mouseenter": function(ev){
+		var hover = $(ev.target).closest("#hover-area");
+		var int = setInterval(function(){
+			hover.addClass(hover_ready);
+			hover_op();
+		}, 3050);
+		
+	},
 
-var shares = {
-	actualURL: document.URL,
-	share_title: document.getElementById("share_title"),
-	post_title: share_title.innerHTML,
-	
-	facebook: function () {
-		var URL = "http://www.facebook.com/sharer.php?u=" + this.actualURL + "&t=" + this.post_title;
-		return URL;
-	}, 
-	
-	proof: function () {
-		console.table ({a:[this.actualURL, this.share_title, this.post_title], b:[this.facebook()]});
+	"mouseleave": function(ev){
+		var hover = $(ev.target).closest("#hover-area");
+		$("section#post").animate({"opacity": "1"}, 250, function(){
+			hover.removeClass(hover_ready);
+		});
+		
 	}
-}.proof();
+});
+
+hover_op();
+
+//cuando hover ready -> ev hover en bloque
+*/
+
+
 
 
 

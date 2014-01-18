@@ -10,7 +10,7 @@
 	if (!$catName) {
 		$categ_array[0]->cat_name = "post";
 	}
-	
+
 	if ($catName && $catName == "Documentos") {
 		$catName = "post";
 	}
@@ -29,7 +29,7 @@ switch ($catName) {
 case "post":
 	?>
 	
-	<section id="post" class="<?php echo $catName; ?>">
+	<section id="post" class="<?php echo $catName; ?> <?php echo 'post-id-' . $post->ID; ?>">
 		<a href="<?php the_permalink(); ?>">
 		<h2>
 			<div class="dots">
@@ -40,28 +40,13 @@ case "post":
 		</h2>
 		</a>
 		<div id="visual">
-			<?php 
-				if (has_post_thumbnail()) {
-					the_post_thumbnail( array(200,150));	
-				}
-			?>
+			<?php post_thumbnail(); ?>
 			<span class="visual_caption">Foto 1</span>
 			<span class="visual_search"></span>
 		</div>
 		
 		<div id="post-excerp">
-			<p>
-			<?php 
-				$content = get_the_content();
-				
-				if (strlen($content) > 110) {
-				$content = substr($content, 0 , 130);
-				echo $content . "... [lee más...]";
-				} else {
-				echo $content;
-				}
-			?>
-			</p>
+			<p><?php echo excerpt_or_content ($post, 110); ?></p>
 		</div>
 		
 		<div id="post-data">
@@ -88,7 +73,7 @@ case "gtrabajo":
 
 	?>
 	
-	<section id="post" class="gtrabajo">
+	<section id="post" class="gtrabajo <?php echo 'post-id-' . $post->ID; ?>">
 		<a href="<?php the_permalink(); ?>">
 		<h2>
 			<div class="dots">
@@ -132,7 +117,7 @@ case "mani":
 	$mani_custom = get_post_meta($post->ID, $mani_post_fields, true);
 	?>
 	
-	<section id="post" class="mani red">
+	<section id="post" class="mani red <?php echo 'post-id-' . $post->ID; ?>">
 		<a href="<?php the_permalink(); ?>">
 		<h2>
 			<div class="dots">
@@ -142,11 +127,7 @@ case "mani":
 		</h2>			
 		</a>
 		<div id="visual">
-			<?php //imagen de la mani
-			if (has_post_thumbnail()) {
-				the_post_thumbnail( array(200,100));	
-			}
-			?>
+			<?php post_thumbnail(); ?>
 		</div>
 		
 		<div id="asamblea-description">
@@ -180,7 +161,7 @@ case "asamblea":
 	?>
 	
 	
-	<section id="post" class="asamblea">
+	<section id="post" class="asamblea <?php echo 'post-id-' . $post->ID; ?>">
 		<a href="<?php the_permalink(); ?>">
 		<h2>
 			<div class="dots">
@@ -219,8 +200,41 @@ case "asamblea":
 	<?php
 	break;
 
-case "comunicado":
-	//ya lo hiré haciendo
+case "comunicados":
+	$asamblea_custom = get_post_meta($post->ID, $asamblea_post_fields, true);
+	?>
+	
+	
+	<section id="post" class="comunicados <?php echo 'post-id-' . $post->ID; ?>">
+		<a href="<?php the_permalink(); ?>">
+		<h2>
+			<div class="dots">
+				<span class="cat1"></span>
+			</div>
+			<span class="title">Comunicados</span>
+		</h2>
+		</a>
+		<div id="comunicados-description">
+			<h3><?php echo $post->post_title; ?></h3>
+			<h4><?php echo excerpt_or_content (&$post, 70) ?></h4>
+		</div>
+		<div id="post-data">
+			<p class="pub">
+				Publicado por: <br/><span class="link"><a href="#"><?php echo  get_the_author_link();?></a></span>
+				<div class="date">
+					<span class="link date_day"><a href="#"><?php the_time('d')?></a></span>|
+					<span class="link date_month"><a href="#"><?php the_time('m')?></a></span>
+					<span class="link date_year"><a href="#">20<?php the_time('y')?></a></span>
+				</div>
+			</p>
+			<p class="social">
+			Socialízalo
+			</p>	
+		</div>
+		
+	</section>
+	
+	<?php	
 	break;
 
 
@@ -244,7 +258,13 @@ default:
 	} // cierro if
 ?>
 
+
+<section id="post">
+		<div class="fb-like-box" data-href="http://www.facebook.com/Berlin15M" data-width="210px" data-height="230px" data-colorscheme="light" data-show-faces="true" data-header="false" data-stream="false" data-show-border="true"></div>
+</section>
+
 <?php // pruebas 	
+
 
 ?>
 
