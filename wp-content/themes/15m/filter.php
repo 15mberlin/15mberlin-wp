@@ -1,3 +1,4 @@
+
 <div id="post" class="filter">
 	<h2>Filtra</h2>
 	<div id="pocket"> 
@@ -39,5 +40,6 @@
 				<td>27</td><td>28</td><td>29</td><td>30</td><td>31</td><td></td><td></td>
 			</tr>
 		</table>
+
 	</div>
 </div>
