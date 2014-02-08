@@ -14,6 +14,28 @@ if ( !defined( 'ABSPATH' ) ) exit;
 /** BuddyPress Helpers ********************************************************/
 
 /**
+ * Return bbPress's component name/ID ('forums' by default)
+ *
+ * This is used primarily for Notifications integration.
+ *
+ * @since bbPress (r5232)
+ * @return string
+ */
+function bbp_get_component_name() {
+
+	// Use existing ID
+	if ( !empty( bbpress()->extend->buddypress->id ) ) {
+		$retval = bbpress()->extend->buddypress->id;
+
+	// Use default
+	} else {
+		$retval = 'forums';
+	}
+
+	return apply_filters( 'bbp_get_component_name', $retval );
+}
+
+/**
  * Filter the current bbPress user ID with the current BuddyPress user ID
  *
  * @since bbPress (r3552)
@@ -80,6 +102,42 @@ function bbp_filter_is_user_home( $is = false ) {
 	return bp_is_my_profile();
 }
 add_filter( 'bbp_is_user_home', 'bbp_filter_is_user_home', 10, 1 );
+
+/**
+ * Add the topic title to the <title> if viewing a single group forum topic
+ *
+ * @since bbPress (r5161)
+ *
+ * @param string $new_title The title to filter
+ * @param string $old_title (Not used)
+ * @param string $sep The separator to use
+ * @return string The possibly modified title
+ */
+function bbp_filter_modify_page_title( $new_title = '', $old_title = '', $sep = '' ) {
+
+	// Only filter if group forums are active
+	if ( bbp_is_group_forums_active() ) {
+
+		// Only filter for single group forum topics
+		if ( bp_is_group_forum_topic() || bp_is_group_forum_topic_edit() ) {
+
+			// Get the topic
+			$topic = get_posts( array(
+				'name'        => bp_action_variable( 1 ),
+				'post_status' => 'publish',
+				'post_type'   => bbp_get_topic_post_type(),
+				'numberposts' => 1
+			) );
+
+			// Add the topic title to the <title>
+			$new_title .= bbp_get_topic_title( $topic[0]->ID ) . ' ' . $sep . ' ';
+		}
+	}
+
+	// Return the title
+	return $new_title;
+}
+add_action( 'bp_modify_page_title', 'bbp_filter_modify_page_title', 10, 3 );
 
 /** BuddyPress Screens ********************************************************/
 

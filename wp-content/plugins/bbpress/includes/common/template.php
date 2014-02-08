@@ -806,7 +806,7 @@ function bbp_is_search() {
 		$retval = true;
 
 	// Check query name
-	if ( empty( $retval ) && bbp_is_query_name( 'bbp_search' ) )
+	if ( empty( $retval ) && bbp_is_query_name( bbp_get_search_rewrite_id() ) )
 		$retval = true;
 
 	// Check $_GET
@@ -844,7 +844,7 @@ function bbp_is_search_results() {
 		$retval = true;
 
 	// Check $_REQUEST
-	if ( empty( $retval ) && !empty( $_REQUEST[bbp_get_search_rewrite_id()] ) )
+	if ( empty( $retval ) && !empty( $_REQUEST[ bbp_get_search_rewrite_id() ] ) )
 		$retval = true;
 
 	return (bool) apply_filters( 'bbp_is_search_results', $retval );
@@ -1330,10 +1330,7 @@ function bbp_dropdown( $args = '' ) {
 	 *  - select_id: ID of the select box. Defaults to 'bbp_forum_id'
 	 *  - tab: Tabindex value. False or integer
 	 *  - options_only: Show only <options>? No <select>?
-	 *  - show_none: False or something like __( '(No Forum)', 'bbpress' ),
-	 *                will have value=""
-	 *  - none_found: False or something like
-	 *                 __( 'No forums to post to!', 'bbpress' )
+	 *  - show_none: Boolean or String __( '(No Forum)', 'bbpress' )
 	 *  - disable_categories: Disable forum categories and closed forums?
 	 *                         Defaults to true. Only for forums and when
 	 *                         the category option is displayed.
@@ -1370,7 +1367,6 @@ function bbp_dropdown( $args = '' ) {
 			'tab'                => bbp_get_tab_index(),
 			'options_only'       => false,
 			'show_none'          => false,
-			'none_found'         => false,
 			'disable_categories' => true,
 			'disabled'           => ''
 		), 'get_dropdown' );
@@ -1407,52 +1403,68 @@ function bbp_dropdown( $args = '' ) {
 
 		/** Drop Down *********************************************************/
 
-		// Items found
+		// Build the opening tag for the select element
+		if ( empty( $r['options_only'] ) ) {
+
+			// Should this select appear disabled?
+			$disabled  = disabled( isset( bbpress()->options[ $r['disabled'] ] ), true, false );
+
+			// Setup the tab index attribute
+			$tab       = !empty( $r['tab'] ) ? ' tabindex="' . intval( $r['tab'] ) . '"' : '';
+
+			// Open the select tag
+			$retval   .= '<select name="' . esc_attr( $r['select_id'] ) . '" id="' . esc_attr( $r['select_id'] ) . '"' . $disabled . $tab . '>' . "\n";
+		}
+
+		// Display a leading 'no-value' option, with or without custom text
+		if ( !empty( $r['show_none'] ) || !empty( $r['none_found'] ) ) {
+
+			// Open the 'no-value' option tag
+			$retval .= "\t<option value=\"\" class=\"level-0\">";
+
+			// Use deprecated 'none_found' first for backpat
+			if ( ! empty( $r['none_found'] ) && is_string( $r['none_found'] ) ) {
+				$retval .= esc_html( $r['none_found'] );
+
+			// Use 'show_none' second
+			} elseif ( ! empty( $r['show_none'] ) && is_string( $r['show_none'] ) ) {
+				$retval .= esc_html( $r['show_none'] );
+
+			// Otherwise, make some educated guesses
+			} else {
+
+				// Switch the response based on post type
+				switch ( $r['post_type'] ) {
+
+					// Topics
+					case bbp_get_topic_post_type() :
+						$retval .= esc_html__( 'No topics available', 'bbpress' );
+						break;
+
+					// Forums
+					case bbp_get_forum_post_type() :
+						$retval .= esc_html__( 'No forums available', 'bbpress' );
+						break;
+
+					// Any other
+					default :
+						$retval .= esc_html__( 'None available', 'bbpress' );
+						break;
+				}
+			}
+
+			// Close the 'no-value' option tag
+			$retval .= '</option>';
+		}
+
+		// Items found so walk the tree
 		if ( !empty( $posts ) ) {
-
-			// Build the opening tag for the select element
-			if ( empty( $r['options_only'] ) ) {
-
-				// Should this select appear disabled?
-				$disabled  = disabled( isset( bbpress()->options[ $r['disabled'] ] ), true, false );
-
-				// Setup the tab index attribute
-				$tab       = !empty( $r['tab'] ) ? ' tabindex="' . intval( $r['tab'] ) . '"' : '';
-
-				// Build the opening tag
-				$retval   .= '<select name="' . esc_attr( $r['select_id'] ) . '" id="' . esc_attr( $r['select_id'] ) . '"' . $disabled . $tab . '>' . "\n";
-			}
-
-			// Get the options
-			$retval .= !empty( $r['show_none'] ) ? "\t<option value=\"\" class=\"level-0\">" . esc_html( $r['show_none'] ) . '</option>' : '';
 			$retval .= walk_page_dropdown_tree( $posts, 0, $r );
+		}
 
-			// Build the closing tag for the select element
-			if ( empty( $r['options_only'] ) ) {
-				$retval .= '</select>';
-			}
-
-		// No items found - Display feedback if no custom message was passed
-		} elseif ( empty( $r['none_found'] ) ) {
-
-			// Switch the response based on post type
-			switch ( $r['post_type'] ) {
-
-				// Topics
-				case bbp_get_topic_post_type() :
-					$retval = __( 'No topics available', 'bbpress' );
-					break;
-
-				// Forums
-				case bbp_get_forum_post_type() :
-					$retval = __( 'No forums available', 'bbpress' );
-					break;
-
-				// Any other
-				default :
-					$retval = __( 'None available', 'bbpress' );
-					break;
-			}
+		// Close the selecet tag
+		if ( empty( $r['options_only'] ) ) {
+			$retval .= '</select>';
 		}
 
 		return apply_filters( 'bbp_get_dropdown', $retval, $r );
@@ -1567,7 +1579,6 @@ function bbp_reply_form_fields() {
 
 	if ( bbp_is_reply_edit() ) : ?>
 
-		<input type="hidden" name="bbp_reply_title" id="bbp_reply_title" value="<?php bbp_reply_title(); ?>" />
 		<input type="hidden" name="bbp_reply_id"    id="bbp_reply_id"    value="<?php bbp_reply_id(); ?>" />
 		<input type="hidden" name="bbp_reply_to"    id="bbp_reply_to"    value="<?php bbp_form_reply_to(); ?>" />
 		<input type="hidden" name="action"          id="bbp_post_action" value="bbp-edit-reply" />
@@ -1579,7 +1590,6 @@ function bbp_reply_form_fields() {
 
 	else : ?>
 
-		<input type="hidden" name="bbp_reply_title" id="bbp_reply_title" value="<?php printf( __( 'Reply To: %s', 'bbpress' ), bbp_get_topic_title() ); ?>" />
 		<input type="hidden" name="bbp_topic_id"    id="bbp_topic_id"    value="<?php bbp_topic_id(); ?>" />
 		<input type="hidden" name="bbp_reply_to"    id="bbp_reply_to"    value="<?php bbp_form_reply_to(); ?>" />
 		<input type="hidden" name="action"          id="bbp_post_action" value="bbp-new-reply" />
@@ -1876,23 +1886,30 @@ function bbp_view_id( $view = '' ) {
 	/**
 	 * Get the view id
 	 *
-	 * If a view id is supplied, that is used. Otherwise the 'bbp_view'
-	 * query var is checked for.
+	 * Use view id if supplied, otherwise bbp_get_view_rewrite_id() query var.
 	 *
 	 * @since bbPress (r2789)
 	 *
 	 * @param string $view Optional. View id.
 	 * @uses sanitize_title() To sanitize the view id
-	 * @uses get_query_var() To get the view id from query var 'bbp_view'
+	 * @uses get_query_var() To get the view id query variable
+	 * @uses bbp_get_view_rewrite_id() To get the view rewrite ID
 	 * @return bool|string ID on success, false on failure
 	 */
 	function bbp_get_view_id( $view = '' ) {
 		$bbp = bbpress();
 
-		$view = !empty( $view ) ? sanitize_title( $view ) : get_query_var( 'bbp_view' );
+		if ( !empty( $view ) ) {
+			$view = sanitize_title( $view );
+		} elseif ( ! empty( $bbp->current_view_id ) ) {
+			$view = $bbp->current_view_id;
+		} else {
+			$view = get_query_var( bbp_get_view_rewrite_id() );
+		}
 
-		if ( array_key_exists( $view, $bbp->views ) )
+		if ( array_key_exists( $view, $bbp->views ) ) {
 			return $view;
+		}
 
 		return false;
 	}
@@ -1969,7 +1986,7 @@ function bbp_view_url( $view = false ) {
 
 		// Unpretty permalinks
 		} else {
-			$url = add_query_arg( array( 'bbp_view' => $view ), home_url( '/' ) );
+			$url = add_query_arg( array( bbp_get_view_rewrite_id() => $view ), home_url( '/' ) );
 		}
 
 		return apply_filters( 'bbp_get_view_link', $url, $view );
@@ -2562,24 +2579,44 @@ function bbp_title( $title = '', $sep = '&raquo;', $seplocation = '' ) {
 	// Profile page
 	} elseif ( bbp_is_single_user() ) {
 
-		// Current users profile
+		// User is viewing their own profile
 		if ( bbp_is_user_home() ) {
-			$new_title['text'] = esc_attr__( 'Your Profile', 'bbpress' );
+			$new_title['text'] = esc_attr_x( 'Your', 'User viewing his/her own profile', 'bbpress' );
 
-		// Other users profile
+		// User is viewing someone else's profile (so use their display name)
 		} else {
-			$new_title['text']   = get_userdata( bbp_get_user_id() )->display_name;
-			$new_title['format'] = esc_attr__( "%s's Profile", 'bbpress' );
+			$new_title['text'] = sprintf( esc_attr_x( "%s's", 'User viewing another users profile', 'bbpress' ), get_userdata( bbp_get_user_id() )->display_name );
+		}
+
+		// User topics created
+		if ( bbp_is_single_user_topics() ) {
+			$new_title['format'] = esc_attr__( "%s Topics",        'bbpress' );
+
+		// User rueplies created
+		} elseif ( bbp_is_single_user_replies() ) {
+			$new_title['format'] = esc_attr__( "%s Replies",       'bbpress' );
+
+		// User favorites
+		} elseif ( bbp_is_favorites() ) {
+			$new_title['format'] = esc_attr__( "%s Favorites",     'bbpress' );
+
+		// User subscriptions
+		} elseif ( bbp_is_subscriptions() ) {
+			$new_title['format'] = esc_attr__( "%s Subscriptions", 'bbpress' );
+
+		// User "home"
+		} else {
+			$new_title['format'] = esc_attr__( "%s Profile",       'bbpress' );
 		}
 
 	// Profile edit page
 	} elseif ( bbp_is_single_user_edit() ) {
 
-		// Current users profile
+		// Current user
 		if ( bbp_is_user_home_edit() ) {
 			$new_title['text']   = esc_attr__( 'Edit Your Profile', 'bbpress' );
 
-		// Other users profile
+		// Other user
 		} else {
 			$new_title['text']   = get_userdata( bbp_get_user_id() )->display_name;
 			$new_title['format'] = esc_attr__( "Edit %s's Profile", 'bbpress' );
