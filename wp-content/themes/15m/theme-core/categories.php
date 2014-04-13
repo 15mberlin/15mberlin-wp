@@ -1,13 +1,13 @@
 <?php
 
 //4 categorias... pillo numeros
-$cats = get_categories();
-$cat_numbers = array(
-		array($cats[0]->name, $cats[0]->term_id), //asamblea
-		array($cats[1]->name, $cats[1]->term_id), //documentos
-		array($cats[2]->name, $cats[2]->term_id), //gtrabajo
-		array($cats[3]->name, $cats[3]->term_id), //mani
-	);
+// $cats = get_categories();
+// $cat_numbers = array(
+  // array($cats[0]->name, $cats[0]->term_id), //asamblea
+  // array($cats[1]->name, $cats[1]->term_id), //documentos
+  // array($cats[2]->name, $cats[2]->term_id), //gtrabajo
+  // array($cats[3]->name, $cats[3]->term_id), //mani
+// );
 
 $types = array (
 	array ("asamblea", "Asamblea"), 
