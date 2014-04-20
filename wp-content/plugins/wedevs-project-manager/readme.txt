@@ -2,38 +2,40 @@
 Contributors: tareq1988
 Donate Link: http://tareq.wedevs.com/donate/
 Tags: project, manager, project manager, project management, todo, todo list, task, basecamp, milestone, message, file, comment, client, team, tracking, planning, lists, reporting
-Requires at least: 3.3
-Tested up to: 3.5.1
+Requires at least: 3.5
+Tested up to: 3.8.1
 Stable tag: trunk
 License: GPLv2 or later
 License URI: http://www.gnu.org/licenses/gpl-2.0.html
 
-A WordPress Project Management plugin. Manage your project simply with the *right* tools and options.
+A WordPress Project Management plugin. Project Management with WordPress has never been this easy!
 
 == Description ==
 
 A WordPress Project Management plugin. Manage your project simply with the \*right\* tools and options. It gives you the taste of basecamp, just inside your loved WordPress.
 
+[Pro Version](http://wedevs.com/plugin/wp-project-manager/) | [Add-ons](http://wedevs.com/wp-project-manager-add-ons/)
+
 = Features =
- * Projects
+ * **Projects**
    * Create a new project
    * Set title and details of that project
    * Assign users for that project
- * Messages
+ * **Messages**
    * Messages are used for discussing about the project with co-workers of  that project
    * You can add attachments on messages
    * Comments can be made for discussion
- * To-do List
+ * **To-do List**
    * Add as many to-do list as you want with title and description
    * Add tasks, assign users, assign due date
    * See progressbar on the list
    * Add comments on individual to-do lists and to-do's
    * Mark to-do as complete/incomplete
- * Milestone
+ * **Milestone**
    * Create milestone
    * Assign messages and to-do list on milestone
    * 3 types of milestones are there, a) upcoming, b) completed and c) late milstone
- * Files
+ * **Files**
    * See all the uploaded files on messages and comments in one place and navigate to invidual attached threads.
 
 = Quick Demo Video =
@@ -101,6 +103,12 @@ A. Found any bugs? Please create an [issue](https://github.com/tareq1988/wp-proj
 10. All attached files from message, comment, to-do can be found here.
 
 == Changelog ==
+
+= 0.4.4 =
+
+* Language files updated
+* New action hooks and JS triggers added
+* Settings API updated
 
 = 0.4.3 =
 
